@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Bezirke des Pilotgebiets (Nummern 1 bis 23). Start und Ziel müssen in diesen Bezirken liegen. Nach einer Änderung einmal 'npm run data' ausführen.",
+  "bezirke": [2, 4, 5, 6, 7, 8, 9, 15, 16],
+  "_hinweis_durchgang": "Durchgangs-Bezirke: Hier können Routen durchführen (z. B. vom 7. in den 2. Bezirk durch die Innere Stadt), Start und Ziel sind dort aber nicht vorgesehen.",
+  "durchgang": [1, 3]
+}
