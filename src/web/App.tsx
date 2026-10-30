@@ -5,6 +5,10 @@ import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings'
 import { isDark } from '../core/sun';
 import type { LngLat } from '../core/types';
 import type { Contact } from '../core/contacts';
+import { distance } from '../core/geo';
+import { edgeKey, matchesTime, newRating, SCORE_LABELS, timeFilterFor, WEEKDAY_SHORT, type Rating, type RatingTarget } from '../core/ratings';
+import { RatingForm } from './components/RatingForm';
+import { RatingsPanel, type RatingsView } from './components/RatingsPanel';
 import { CallScreen } from './components/CallScreen';
 import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
@@ -17,13 +21,13 @@ import { RouteDetails } from './components/RouteDetails';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StreetPreview } from './components/StreetPreview';
 import { TimePicker } from './components/TimePicker';
-import { getPlanner } from './data';
+import { getPlanner, getStops } from './data';
 import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
 import { useStored } from './storage';
 import { useEscort } from './useEscort';
 
-type Pick = 'start' | 'end' | null;
+type Pick = 'start' | 'end' | 'rate' | null;
 
 export function App() {
   const [planner, setPlanner] = useState<Planner | null>(null);
@@ -48,6 +52,10 @@ export function App() {
   const [showEscortSetup, setShowEscortSetup] = useState(false);
   const [arrived, setArrived] = useState<string[] | null>(null);
   const escort = useEscort();
+  const [ratings, setRatings] = useStored<Rating[]>('ratings', []);
+  const [ratingsView, setRatingsView] = useStored<RatingsView>('ratingsView', 'time');
+  const [showRatings, setShowRatings] = useState(false);
+  const [draft, setDraft] = useState<{ target: RatingTarget; coords: LngLat } | null>(null);
   const map = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -89,7 +97,7 @@ export function App() {
     setBusy(true);
     setMessage(null);
     planner
-      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance })
+      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, ratings })
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
@@ -101,7 +109,47 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime, settings.parkAvoidance]);
+  }, [planner, start, end, customTime, settings.parkAvoidance, ratings]);
+
+  // Bewertungen auf der Karte, gefiltert nach Wochentag und Uhrzeit
+  const ratingTime = customTime ?? new Date();
+  const visibleRatings = useMemo(() => {
+    if (ratingsView === 'off') return [];
+    if (ratingsView === 'all') return ratings;
+    const f = timeFilterFor(ratingTime);
+    return ratings.filter((r) => matchesTime(r, f));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ratings, ratingsView, customTime, Math.floor(Date.now() / 600000)]);
+  useEffect(() => {
+    map.current?.setRatings(
+      visibleRatings.map((r) => ({
+        id: r.id,
+        coords: r.coords,
+        score: r.score,
+        label: `${r.target.name || 'Ort'}: ${r.score} – ${SCORE_LABELS[r.score]} (${WEEKDAY_SHORT[r.weekday]} ${r.hour}:00)`,
+      })),
+    );
+  }, [visibleRatings]);
+
+  /** Was wurde angetippt? Haltestelle (bis 40 m), sonst Wegstück (bis 25 m), sonst freier Ort */
+  const resolveTarget = useCallback(
+    async (p: LngLat): Promise<RatingTarget> => {
+      const stops = await getStops();
+      let best: { name: string; id: string; d: number } | null = null;
+      for (const s of stops) {
+        const d = distance(p, [s.lon, s.lat]);
+        if (d < 40 && (!best || d < best.d)) best = { name: s.name, id: s.id, d };
+      }
+      if (best) return { type: 'stop', key: `${best.name}`, name: best.name };
+      if (planner) {
+        await planner.ensureDistricts([p], 100);
+        const hit = planner.graph.nearestEdge(p, 25);
+        if (hit) return { type: 'edge', key: edgeKey(planner.graph, hit.edge), name: hit.edge.name || 'Fußweg' };
+      }
+      return { type: 'place', name: 'Ort auf der Karte' };
+    },
+    [planner],
+  );
 
   useEffect(() => {
     map.current?.showPlan(plan, selected, planTime);
@@ -131,12 +179,17 @@ export function App() {
   const onMapClick = useCallback(
     (p: LngLat) => {
       if (!pick) return;
+      if (pick === 'rate') {
+        setPick(null);
+        resolveTarget(p).then((target) => setDraft({ target, coords: p }));
+        return;
+      }
       const place: Place = { label: pick === 'start' ? 'Punkt auf der Karte (Start)' : 'Punkt auf der Karte (Ziel)', coords: p, kind: 'map' };
       if (pick === 'start') setStart(place);
       else setEnd(place);
       setPick(null);
     },
-    [pick],
+    [pick, resolveTarget],
   );
 
   const chosen = plan?.[selected];
@@ -161,12 +214,17 @@ export function App() {
       <button type="button" className="settings-btn" onClick={() => setShowSettings(true)} aria-label="Einstellungen">
         ⚙
       </button>
+      <button type="button" className="ratings-btn" onClick={() => setShowRatings(true)} aria-label="Bewertungen">
+        ⭐
+      </button>
 
       {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
 
       {pick && (
         <div className="pick-banner" role="status">
-          Tippe auf die Karte, um {pick === 'start' ? 'den Start' : 'das Ziel'} festzulegen.
+          {pick === 'rate'
+            ? 'Tippe auf den Weg, den Ort oder die Haltestelle, die du bewerten möchtest.'
+            : `Tippe auf die Karte, um ${pick === 'start' ? 'den Start' : 'das Ziel'} festzulegen.`}
           <button type="button" className="link-btn" onClick={() => setPick(null)}>
             Abbrechen
           </button>
@@ -363,10 +421,40 @@ export function App() {
                 ))}
             </>
           )}
+          <button type="button" className="btn primary" onClick={() => (setArrived(null), setPick('rate'))}>
+            ⭐ Eine Stelle deines Wegs bewerten
+          </button>
           <button type="button" className="btn" onClick={() => setArrived(null)}>
             Schließen
           </button>
         </Modal>
+      )}
+
+      {showRatings && (
+        <RatingsPanel
+          ratings={ratings}
+          view={ratingsView}
+          onViewChange={setRatingsView}
+          timeLabel={formatTime(ratingTime)}
+          visibleCount={visibleRatings.length}
+          onStartRating={() => (setShowRatings(false), setPick('rate'))}
+          onDelete={(id) => setRatings((rs) => rs.filter((r) => r.id !== id))}
+          onFocus={(p) => (setShowRatings(false), map.current?.focus(p))}
+          onClose={() => setShowRatings(false)}
+        />
+      )}
+
+      {draft && (
+        <RatingForm
+          target={draft.target}
+          coords={draft.coords}
+          when={customTime ?? undefined}
+          onClose={() => setDraft(null)}
+          onSave={(r) => {
+            setRatings((rs) => [...rs, newRating(r)]);
+            setDraft(null);
+          }}
+        />
       )}
 
       {fakeCall && <CallScreen kind="fake" caller="Sam" onHangup={() => setFakeCall(false)} />}

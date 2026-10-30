@@ -6,6 +6,7 @@ import { summarize, type RouteSummary } from './analysis';
 import { bboxAround, bboxIntersects, pointInRing } from './geo';
 import { Graph } from './graph';
 import { findRoute } from './routing';
+import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
 import type { DataIndex, DistrictFile, DistrictInfo, LngLat } from './types';
@@ -54,9 +55,11 @@ export class Planner {
     return p;
   }
 
-  async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions = {}): Promise<PlanResult | null> {
+  async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions & { ratings?: Rating[] } = {}): Promise<PlanResult | null> {
     await this.ensureDistricts([from, to]);
-    const ctx = createContext(date, isDark(date, from[1], from[0]), opts);
+    // Bewertungen passend zu Wochentag und Uhrzeit
+    const rating = opts.ratings?.length ? ratingLookup(this.graph, opts.ratings, timeFilterFor(date)) : opts.rating;
+    const ctx = createContext(date, isDark(date, from[1], from[0]), { ...opts, rating });
     const fast = findRoute(this.graph, from, to, 'fastest', ctx);
     const safe = findRoute(this.graph, from, to, 'safest', ctx);
     if (!fast || !safe) return null;

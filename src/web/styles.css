@@ -1322,3 +1322,103 @@ input {
 a.btn {
   color: var(--text);
 }
+
+/* ---------- Block C: Bewertungen */
+
+.ratings-btn {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: 110px;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(21, 19, 31, 0.85);
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+@media (max-width: 400px) {
+  .brand + .badge {
+    display: none;
+  }
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.score-btn {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.score-btn span {
+  font-size: 1.5rem;
+}
+
+.score-btn small {
+  font-size: 0.66rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.score-btn.active {
+  border-color: var(--accent);
+  background: #322c55;
+}
+
+.reasons {
+  border: none;
+  padding: 0;
+}
+
+.reasons legend {
+  margin-bottom: 6px;
+}
+
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reason-chips .chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.field textarea {
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+}
+
+.rating-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rating-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.rating-list .link-btn {
+  justify-self: start;
+  padding-left: 0;
+}

@@ -16,6 +16,8 @@ export class Graph {
   readonly edges: Edge[] = [];
   readonly pois = new Map<string, Poi>();
   readonly loaded = new Set<number>();
+  /** OSM-ID je Knoten (für stabile Schlüssel, z. B. bei Bewertungen) */
+  private osmIds: number[] = [];
   private nodeByOsm = new Map<number, number>();
   private grid = new Map<string, number[]>();
   /** Größe des zusammenhängenden Teilnetzes je Knoten (wird bei Bedarf berechnet) */
@@ -33,6 +35,7 @@ export class Graph {
       if (idx === undefined) {
         idx = this.coords.length;
         this.nodeByOsm.set(osm, idx);
+        this.osmIds.push(osm);
         const c: LngLat = [file.nodes[i + 1] / 1e5, file.nodes[i + 2] / 1e5];
         this.coords.push(c);
         this.adjacency.push([]);
@@ -94,6 +97,35 @@ export class Graph {
     return best;
   }
 
+  osmIdOf(node: number): number {
+    return this.osmIds[node];
+  }
+
+  /** Kanten mit mindestens einem Endpunkt im Umkreis (grobe Vorauswahl) */
+  edgesNear(p: LngLat, meters: number): Edge[] {
+    const out = new Set<Edge>();
+    const r = Math.ceil(meters / 150) + 1;
+    const cx = Math.floor(p[0] / CELL);
+    const cy = Math.floor(p[1] / CELL);
+    for (let dx = -r; dx <= r; dx++)
+      for (let dy = -r; dy <= r; dy++)
+        for (const n of this.grid.get(`${cx + dx}:${cy + dy}`) ?? [])
+          if (distance(p, this.coords[n]) <= meters + 150) for (const eid of this.adjacency[n]) out.add(this.edges[eid]);
+    return [...out];
+  }
+
+  /** Nächstes Wegstück zu einem Punkt (Abstand zur Linie), oder null */
+  nearestEdge(p: LngLat, maxMeters = 30): { edge: Edge; distance: number } | null {
+    let best: { edge: Edge; distance: number } | null = null;
+    for (const e of this.edgesNear(p, maxMeters)) {
+      for (let i = 1; i < e.coords.length; i++) {
+        const d = distToSegment(p, e.coords[i - 1], e.coords[i]);
+        if (d <= maxMeters && (!best || d < best.distance)) best = { edge: e, distance: d };
+      }
+    }
+    return best;
+  }
+
   private components(): Int32Array {
     if (this.componentSize) return this.componentSize;
     const n = this.coords.length;
@@ -125,6 +157,21 @@ export class Graph {
   other(edge: Edge, node: number): number {
     return edge.a === node ? edge.b : edge.a;
   }
+}
+
+function distToSegment(p: LngLat, a: LngLat, b: LngLat): number {
+  // lokale Projektion in Meter
+  const kx = 111320 * Math.cos((p[1] * Math.PI) / 180);
+  const ky = 110540;
+  const ax = (a[0] - p[0]) * kx;
+  const ay = (a[1] - p[1]) * ky;
+  const bx = (b[0] - p[0]) * kx;
+  const by = (b[1] - p[1]) * ky;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+  return Math.hypot(ax + t * dx, ay + t * dy);
 }
 
 function cellKey(c: LngLat): string {
