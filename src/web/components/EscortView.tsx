@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import { secondsLeft, secondsUntilCheck, type EscortEvent } from '../../core/escort';
 import type { EscortSession, LastPosition } from '../useEscort';
+import { formatDistance, formatDuration } from '../format';
 import type { VoiceMode } from '../signals';
 import { CallScreen } from './CallScreen';
 import { ContactActions, EmergencyButtons, SilentCallHint } from './EmergencyMenu';
@@ -21,10 +22,14 @@ interface Props {
   voiceMode: VoiceMode;
   awayFor: number | null;
   onClearAway: () => void;
+  /** eingeklappt: nur Status, Restweg und Bestätigen */
+  compact: boolean;
+  onToggleCompact: () => void;
+  remaining: { meters: number; seconds: number; offRoute: boolean } | null;
 }
 
 /** Laufende Begleitung mit Eskalationsstufen */
-export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onTalkCall, voiceMode, awayFor, onClearAway }: Props) {
+export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onTalkCall, voiceMode, awayFor, onClearAway, compact, onToggleCompact, remaining }: Props) {
   const [pinFor, setPinFor] = useState<'arrive' | 'cancel' | 'cancelAlarm' | null>(null);
   const { state } = session;
   const chosen = contacts.filter((c) => session.contactIds.includes(c.id));
@@ -101,11 +106,71 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
       </div>
     );
 
+  const holdHandlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      dispatch({ type: 'hold', down: true, now: Date.now() });
+    },
+    onPointerUp: () => dispatch({ type: 'hold', down: false, now: Date.now() }),
+    onPointerCancel: () => dispatch({ type: 'hold', down: false, now: Date.now() }),
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  };
+
+  const minutes = Math.round((now - state.startedAt) / 60000);
+  const summary = (
+    <span className="escort-summary">
+      <span className="live-dot" aria-hidden /> {session.destination} · seit {minutes} min
+      {remaining && (
+        <>
+          {' '}
+          · noch {formatDistance(remaining.meters)} (ca. {formatDuration(remaining.seconds)}){remaining.offRoute ? ' · abseits der Route' : ''}
+        </>
+      )}
+    </span>
+  );
+
+  const prompt = state.phase === 'prompt' && (
+    <div className="prompt flash" role="alertdialog" aria-modal="true" aria-label="Alles okay?">
+      <h2>Alles okay?</h2>
+      <p>Noch {left ?? 0} Sekunden, dann ruft dich deine Begleitung an.</p>
+      <button type="button" className="btn ok big" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>
+        Ja, alles okay
+      </button>
+      <button type="button" className="btn danger big" onClick={() => dispatch({ type: 'help', now: Date.now() })}>
+        Nein, ich brauche Hilfe
+      </button>
+    </div>
+  );
+
+  if (compact)
+    return (
+      <section className="escort-panel compact" aria-label="Begleitung">
+        <button type="button" className="sheet-grabber" onClick={onToggleCompact} aria-label="Begleitung aufklappen">
+          <span />
+        </button>
+        <button type="button" className="escort-compact-head" onClick={onToggleCompact}>
+          {summary}
+        </button>
+        {state.settings.mode === 'interval' ? (
+          <button type="button" className="btn ok compact-ok" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>
+            Alles okay {until !== null ? `· ${until} s` : ''}
+          </button>
+        ) : (
+          <button type="button" className={`btn compact-hold ${state.holding ? 'holding' : ''}`} {...holdHandlers}>
+            {state.holding ? 'Ich bin da – halten' : `Gedrückt halten${until !== null ? ` · ${until} s` : ''}`}
+          </button>
+        )}
+        {prompt}
+        {pinDialog}
+      </section>
+    );
+
   return (
     <section className="escort-panel" aria-label="Begleitung">
-      <div className="escort-head">
-        <span className="live-dot" aria-hidden /> Begleitung aktiv · {session.destination}
-      </div>
+      <button type="button" className="sheet-grabber" onClick={onToggleCompact} aria-label="Begleitung einklappen">
+        <span />
+      </button>
+      <div className="escort-head">{summary}</div>
 
       {state.settings.mode === 'interval' ? (
         <button type="button" className="ok-button" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>
@@ -116,13 +181,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
         <button
           type="button"
           className={`hold-button ${state.holding ? 'holding' : ''}`}
-          onPointerDown={(e) => {
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-            dispatch({ type: 'hold', down: true, now: Date.now() });
-          }}
-          onPointerUp={() => dispatch({ type: 'hold', down: false, now: Date.now() })}
-          onPointerCancel={() => dispatch({ type: 'hold', down: false, now: Date.now() })}
-          onContextMenu={(e) => e.preventDefault()}
+          {...holdHandlers}
         >
           <b>{state.holding ? 'Ich bin da' : 'Gedrückt halten'}</b>
           <span>{state.holding ? 'Loslassen startet eine Rückfrage' : until !== null ? `Bitte halten · Rückfrage in ${until} s` : ''}</span>
@@ -156,18 +215,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
         Begleitung abbrechen (PIN)
       </button>
 
-      {state.phase === 'prompt' && (
-        <div className="prompt flash" role="alertdialog" aria-modal="true" aria-label="Alles okay?">
-          <h2>Alles okay?</h2>
-          <p>Noch {left ?? 0} Sekunden, dann ruft dich deine Begleitung an.</p>
-          <button type="button" className="btn ok big" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>
-            Ja, alles okay
-          </button>
-          <button type="button" className="btn danger big" onClick={() => dispatch({ type: 'help', now: Date.now() })}>
-            Nein, ich brauche Hilfe
-          </button>
-        </div>
-      )}
+      {prompt}
       {pinDialog}
     </section>
   );

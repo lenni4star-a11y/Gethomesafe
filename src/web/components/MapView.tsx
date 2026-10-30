@@ -28,6 +28,8 @@ export interface MapHandle {
   showPlan(plan: PlanResult | null, selected: RouteMode, date: Date): void;
   setPoints(start: LngLat | null, end: LngLat | null): void;
   setRatings(points: RatingPoint[]): void;
+  /** Zuhause als neutrales Symbol (ohne Beschriftung), null = ausblenden */
+  setHome(p: LngLat | null): void;
   flyAlong(route: RouteSummary, onDone: () => void): void;
   stopFly(): void;
   focus(p: LngLat, zoom?: number): void;
@@ -46,6 +48,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
   const ready = useRef<Promise<void>>();
   const markers = useRef<{ start?: maplibregl.Marker; end?: maplibregl.Marker }>({});
   const placeMarkers = useRef<maplibregl.Marker[]>([]);
+  const homeMarker = useRef<maplibregl.Marker>();
   const flight = useRef<number | null>(null);
   const flyDot = useRef<maplibregl.Marker>();
   const clickRef = useRef(onMapClick);
@@ -211,6 +214,16 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
       };
       set('start', start);
       set('end', end);
+    },
+
+    setHome(p) {
+      homeMarker.current?.remove();
+      homeMarker.current = undefined;
+      if (!p || !mapRef.current) return;
+      const el = document.createElement('div');
+      el.className = 'home-pin';
+      el.setAttribute('aria-hidden', 'true');
+      homeMarker.current = new maplibregl.Marker({ element: el }).setLngLat(p).addTo(mapRef.current);
     },
 
     setRatings(points) {

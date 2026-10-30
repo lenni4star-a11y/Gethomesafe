@@ -32,3 +32,15 @@ describe('Parks', () => {
     expect(normal).toBeLessThan(stark);
   });
 });
+
+import { remainingAlong } from '../geo';
+
+describe('Restweg', () => {
+  it('misst den Rest ab dem nächsten Punkt der Route', () => {
+    const line: [number, number][] = [[16.3, 48.2], [16.31, 48.2], [16.32, 48.2]];
+    const r = remainingAlong(line, [16.315, 48.2001]);
+    expect(Math.round(r.remaining)).toBeGreaterThan(360);
+    expect(Math.round(r.remaining)).toBeLessThan(380);
+    expect(r.offRoute).toBeLessThan(20);
+  });
+});

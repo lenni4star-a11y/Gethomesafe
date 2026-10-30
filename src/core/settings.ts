@@ -21,6 +21,8 @@ export interface Settings {
   mapillaryToken: string;
   /** Stimme im simulierten Anruf: automatisch, nur Gerätestimme oder nur Aufnahme */
   voice: 'auto' | 'device' | 'recording';
+  /** Zuhause auf der Karte als neutrales Symbol zeigen */
+  showHomeOnMap: boolean;
   escort: EscortSettings;
 }
 
@@ -28,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   parkAvoidance: 2,
   mapillaryToken: '',
   voice: 'auto',
+  showHomeOnMap: true,
   escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1 },
 };
 

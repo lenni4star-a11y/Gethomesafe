@@ -13,6 +13,8 @@ export interface EscortSession {
   pinHash: string;
   destination: string;
   contactIds: string[];
+  /** geplante Route (für Restweg), nur lokal */
+  route?: LngLat[];
 }
 
 export interface LastPosition {
@@ -121,8 +123,8 @@ export function useEscort() {
     return () => document.removeEventListener('visibilitychange', onChange);
   }, [active]);
 
-  const start = useCallback(async (settings: EscortSettings, pin: string, destination: string, contactIds: string[]) => {
-    const s: EscortSession = { state: startEscort(settings, Date.now()), pinHash: await hashPin(pin), destination, contactIds };
+  const start = useCallback(async (settings: EscortSettings, pin: string, destination: string, contactIds: string[], route?: LngLat[]) => {
+    const s: EscortSession = { state: startEscort(settings, Date.now()), pinHash: await hashPin(pin), destination, contactIds, route };
     sessionRef.current = s;
     setSession(s);
     save(SESSION_KEY, s);

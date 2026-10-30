@@ -5,7 +5,8 @@ import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings'
 import { isDark } from '../core/sun';
 import type { LngLat } from '../core/types';
 import type { Contact } from '../core/contacts';
-import { distance } from '../core/geo';
+import { distance, remainingAlong } from '../core/geo';
+import { WALK_SPEED } from '../core/routing';
 import { edgeKey, matchesTime, newRating, SCORE_LABELS, timeFilterFor, WEEKDAY_SHORT, type Rating, type RatingTarget } from '../core/ratings';
 import { RatingForm } from './components/RatingForm';
 import { RatingsPanel, type RatingsView } from './components/RatingsPanel';
@@ -14,6 +15,7 @@ import { CallScreen } from './components/CallScreen';
 import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
 import { EscortView } from './components/EscortView';
+import { HomeSettings } from './components/HomeSettings';
 import { Legend } from './components/Legend';
 import { Modal } from './components/Modal';
 import { MapView, type MapHandle } from './components/MapView';
@@ -29,7 +31,8 @@ import { useStored } from './storage';
 import { useEscort } from './useEscort';
 import { unlockAudio } from './signals';
 
-type Pick = 'start' | 'end' | 'rate' | null;
+type Pick = 'start' | 'end' | 'rate' | 'home' | null;
+type SheetState = 'collapsed' | 'half' | 'full';
 
 export function App() {
   const [planner, setPlanner] = useState<Planner | null>(null);
@@ -46,7 +49,9 @@ export function App() {
   const [flying, setFlying] = useState(false);
   const [photos, setPhotos] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  /** Routen-Menü: eingeklappt, halb oder ganz offen */
+  const [sheet, setSheet] = useState<SheetState>('collapsed');
+  const [escortCompact, setEscortCompact] = useState(true);
   const [showTime, setShowTime] = useState(false);
   const [contacts, setContacts] = useStored<Contact[]>('contacts', []);
   const [showSos, setShowSos] = useState(false);
@@ -60,6 +65,9 @@ export function App() {
   const [ratingsView, setRatingsView] = useStored<RatingsView>('ratingsView', 'time');
   const [showRatings, setShowRatings] = useState(false);
   const [draft, setDraft] = useState<{ target: RatingTarget; coords: LngLat } | null>(null);
+  const [home, setHome] = useStored<Place | null>('home', null);
+  const [favorites, setFavorites] = useStored<Place[]>('favorites', []);
+  const [homePromptDone, setHomePromptDone] = useStored<boolean>('homePromptDone', false);
   const map = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -80,6 +88,10 @@ export function App() {
   useEffect(() => {
     map.current?.setPoints(start?.coords ?? null, end?.coords ?? null);
   }, [start, end]);
+
+  useEffect(() => {
+    map.current?.setHome(settings.showHomeOnMap && home ? home.coords : null);
+  }, [home, settings.showHomeOnMap]);
 
   // Route berechnen, sobald Start und Ziel feststehen
   useEffect(() => {
@@ -105,6 +117,7 @@ export function App() {
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
+        else setSheet('collapsed');
         setPlan(res);
         setPlanTime(when);
       })
@@ -159,7 +172,7 @@ export function App() {
     map.current?.showPlan(plan, selected, planTime);
   }, [plan, selected, planTime]);
 
-  const locate = useCallback(() => {
+  const locate = useCallback((use: (p: Place) => void = setStart) => {
     if (!window.isSecureContext || !navigator.geolocation) {
       setMessage('Der Standort ist nur über eine sichere Verbindung (https) verfügbar. Wähle den Start bitte über die Suche oder die Karte.');
       return;
@@ -168,7 +181,7 @@ export function App() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setMessage(null);
-        setStart({ label: 'Mein Standort', coords: [pos.coords.longitude, pos.coords.latitude], kind: 'location' });
+        use({ label: 'Mein Standort', coords: [pos.coords.longitude, pos.coords.latitude], kind: 'location' });
       },
       (err) =>
         setMessage(
@@ -182,7 +195,18 @@ export function App() {
 
   const onMapClick = useCallback(
     (p: LngLat) => {
-      if (!pick) return;
+      if (!pick) {
+        setSheet('collapsed');
+        setEscortCompact(true);
+        return;
+      }
+      setSheet('collapsed');
+      if (pick === 'home') {
+        setPick(null);
+        setHome({ label: 'Punkt auf der Karte', coords: p, kind: 'home' });
+        setShowSettings(true);
+        return;
+      }
       if (pick === 'rate') {
         setPick(null);
         resolveTarget(p).then((target) => setDraft({ target, coords: p }));
@@ -196,14 +220,35 @@ export function App() {
     [pick, resolveTarget],
   );
 
+  /** Sofort die sicherste Route nach Hause planen */
+  const goHome = useCallback(() => {
+    if (!home) {
+      setShowSettings(true);
+      return;
+    }
+    setSelected('safest');
+    setEnd({ ...home, label: 'Zuhause', kind: 'home' });
+    if (!start) locate();
+  }, [home, start, locate]);
+
+  const isFavorite = !!end && favorites.some((f) => f.coords[0] === end.coords[0] && f.coords[1] === end.coords[1]);
+
   const chosen = plan?.[selected];
+
+  // Restweg während der Begleitung (aus geplanter Route und letzter Position)
+  const escortRemaining = useMemo(() => {
+    const route = escort.session?.route;
+    if (!route || !escort.lastPos) return null;
+    const r = remainingAlong(route, escort.lastPos.coords);
+    return { meters: r.remaining, seconds: r.remaining / WALK_SPEED, offRoute: r.offRoute > 60 };
+  }, [escort.session?.route, escort.lastPos]);
   const extra = plan && !plan.same ? plan.safest.seconds - plan.fastest.seconds : 0;
 
   const fly = () => {
     if (!chosen) return;
     setPhotos(false);
     setFlying(true);
-    setExpanded(false);
+    setSheet('collapsed');
     map.current?.flyAlong(chosen, () => setFlying(false));
   };
 
@@ -228,7 +273,9 @@ export function App() {
         <div className="pick-banner" role="status">
           {pick === 'rate'
             ? 'Tippe auf den Weg, den Ort oder die Haltestelle, die du bewerten möchtest.'
-            : `Tippe auf die Karte, um ${pick === 'start' ? 'den Start' : 'das Ziel'} festzulegen.`}
+            : pick === 'home'
+              ? 'Tippe auf die Karte, um dein Zuhause festzulegen.'
+              : `Tippe auf die Karte, um ${pick === 'start' ? 'den Start' : 'das Ziel'} festzulegen.`}
           <button type="button" className="link-btn" onClick={() => setPick(null)}>
             Abbrechen
           </button>
@@ -259,6 +306,9 @@ export function App() {
           voiceMode={settings.voice}
           awayFor={escort.awayFor}
           onClearAway={escort.clearAway}
+          compact={escortCompact}
+          onToggleCompact={() => setEscortCompact((c) => !c)}
+          remaining={escortRemaining}
           onEnd={async (didArrive) => {
             const ids = escort.session?.contactIds ?? [];
             await escort.end();
@@ -268,15 +318,61 @@ export function App() {
       )}
 
       {!flying && !escort.session && (
-        <section className={`sheet ${expanded ? 'expanded' : ''}`} aria-label="Heimweg planen">
-          <button type="button" className="grabber" onClick={() => setExpanded((e) => !e)} aria-label={expanded ? 'Bereich verkleinern' : 'Bereich vergrößern'}>
-            <span />
-          </button>
-
+        <section className={`sheet sheet-${sheet}`} aria-label="Heimweg planen">
+          <SheetGrabber state={sheet} onChange={setSheet} />
+          {sheet === 'collapsed' ? (
+            <div className="collapsed-row">
+              {chosen ? (
+                <button type="button" className="collapsed-main" onClick={() => setSheet('half')} aria-label="Routen-Menü öffnen">
+                  <small>{selected === 'safest' ? 'Sicherste Route' : 'Schnellste Route'} · Wert {chosen.score}/10</small>
+                  <b>
+                    {formatDuration(chosen.seconds)} · {formatDistance(chosen.length)}
+                  </b>
+                </button>
+              ) : (
+                <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
+                  🔍 Wohin?
+                </button>
+              )}
+              <button type="button" className="icon-btn home-btn" onClick={goHome} aria-label="Nach Hause: sicherste Route planen" title="Nach Hause">
+                🏠
+              </button>
+            </div>
+          ) : (
+            <>
           <div className="inputs">
-            <PlaceInput label="Von" value={start} onChange={setStart} bbox={bbox} onLocate={locate} onPickOnMap={() => setPick(pick === 'start' ? null : 'start')} picking={pick === 'start'} />
-            <PlaceInput label="Nach" value={end} onChange={setEnd} bbox={bbox} onPickOnMap={() => setPick(pick === 'end' ? null : 'end')} picking={pick === 'end'} />
+            <PlaceInput label="Von" value={start} onChange={setStart} bbox={bbox} onLocate={() => locate()} onPickOnMap={() => (setPick(pick === 'start' ? null : 'start'), setSheet('collapsed'))} picking={pick === 'start'} />
+            <PlaceInput label="Nach" value={end} onChange={setEnd} bbox={bbox} onPickOnMap={() => (setPick(pick === 'end' ? null : 'end'), setSheet('collapsed'))} picking={pick === 'end'} />
           </div>
+
+          <div className="quick-row" aria-label="Schnellwahl">
+            <button type="button" className="chip home-chip" onClick={goHome}>
+              🏠 Nach Hause
+            </button>
+            {favorites.map((f, i) => (
+              <button key={i} type="button" className="chip" onClick={() => setEnd({ ...f, kind: 'favorite' })}>
+                ★ {f.label}
+              </button>
+            ))}
+            {end && end.kind !== 'home' && !isFavorite && favorites.length < 6 && (
+              <button type="button" className="chip" onClick={() => setFavorites([...favorites, { label: end.label, coords: end.coords, kind: 'favorite' }])}>
+                ☆ Merken
+              </button>
+            )}
+          </div>
+          {!home && !homePromptDone && (
+            <div className="notice home-prompt">
+              <b>Zuhause festlegen?</b> Dann planst du mit einem Tipp den sichersten Heimweg. Bleibt nur auf deinem Gerät.
+              <div className="tp-row">
+                <button type="button" className="chip active" onClick={() => (setHomePromptDone(true), setShowSettings(true))}>
+                  Festlegen
+                </button>
+                <button type="button" className="chip" onClick={() => setHomePromptDone(true)}>
+                  Später
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="time-row">
             <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? '☾ dunkel' : '☀ hell'}</span>
@@ -329,19 +425,19 @@ export function App() {
                 <>
                   <p className="reasons">{chosen.reasons.join(' · ')}</p>
                   <div className="actions">
-                    <button type="button" className="btn primary" onClick={() => (setPhotos(true), setExpanded(false))}>
-                      Vorschau
+                    <button type="button" className="btn primary" onClick={() => (setPhotos(true), setSheet('collapsed'))}>
+                      Weg ansehen
                     </button>
-                    <button type="button" className="btn" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
-                      {expanded ? 'Weniger' : 'Details'}
+                    <button type="button" className="btn" onClick={() => setSheet(sheet === 'full' ? 'half' : 'full')} aria-expanded={sheet === 'full'}>
+                      {sheet === 'full' ? 'Weniger' : 'Details'}
                     </button>
                   </div>
-                  {expanded && (
+                  {sheet === 'full' && (
                     <RouteDetails
                       route={chosen}
                       date={planTime}
                       onFocus={(p) => {
-                        setExpanded(false);
+                        setSheet('collapsed');
                         map.current?.focus(p);
                       }}
                     />
@@ -361,7 +457,10 @@ export function App() {
             🫂 Begleitung starten
           </button>
 
-          <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei), 144 (Rettung) oder 112.</p>
+
+              <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei), 144 (Rettung) oder 112.</p>
+            </>
+          )}
         </section>
       )}
 
@@ -377,6 +476,17 @@ export function App() {
 
       {showSettings && (
         <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)}>
+          <HomeSettings
+            home={home}
+            onHomeChange={setHome}
+            favorites={favorites}
+            onFavoritesChange={setFavorites}
+            showOnMap={settings.showHomeOnMap}
+            onShowOnMapChange={(v) => setSettings({ ...settings, showHomeOnMap: v })}
+            bbox={bbox}
+            onPickOnMap={() => (setShowSettings(false), setPick('home'))}
+            onLocate={() => locate((p) => setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }))}
+          />
           <section className="settings-section">
             <h3>Begleitmodus</h3>
             <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
@@ -414,7 +524,7 @@ export function App() {
 
       {showEscortSetup && (
         <EscortSetup
-          destination={end?.label ?? ''}
+          destination={end?.kind === 'home' || (!end && home) ? 'Zuhause' : (end?.label ?? '')}
           contacts={contacts}
           onContactsChange={setContacts}
           settings={settings.escort}
@@ -422,7 +532,8 @@ export function App() {
           onClose={() => setShowEscortSetup(false)}
           onStart={(pin, dest, ids) => {
             setShowEscortSetup(false);
-            escort.start(settings.escort, pin, dest, ids);
+            escort.start(settings.escort, pin, dest, ids, chosen?.coords);
+            setEscortCompact(true);
           }}
         />
       )}
@@ -456,7 +567,7 @@ export function App() {
           onViewChange={setRatingsView}
           timeLabel={formatTime(ratingTime)}
           visibleCount={visibleRatings.length}
-          onStartRating={() => (setShowRatings(false), setPick('rate'))}
+          onStartRating={() => (setShowRatings(false), setSheet('collapsed'), setPick('rate'))}
           onDelete={(id) => setRatings((rs) => rs.filter((r) => r.id !== id))}
           onFocus={(p) => (setShowRatings(false), map.current?.focus(p))}
           onClose={() => setShowRatings(false)}
@@ -501,5 +612,30 @@ function FakeCallCountdown({ at, onFire, onCancel }: { at: number; onFire: () =>
         Abbrechen
       </button>
     </div>
+  );
+}
+
+/** Griff des Routen-Menüs: tippen oder nach oben/unten wischen */
+function SheetGrabber({ state, onChange }: { state: SheetState; onChange: (s: SheetState) => void }) {
+  const order: SheetState[] = ['collapsed', 'half', 'full'];
+  const startY = useRef<number | null>(null);
+  const step = (dir: 1 | -1) => onChange(order[Math.max(0, Math.min(2, order.indexOf(state) + dir))]);
+  return (
+    <button
+      type="button"
+      className="sheet-grabber"
+      aria-label={state === 'full' ? 'Routen-Menü verkleinern' : 'Routen-Menü vergrößern'}
+      onPointerDown={(e) => (startY.current = e.clientY)}
+      onPointerUp={(e) => {
+        if (startY.current === null) return;
+        const dy = e.clientY - startY.current;
+        startY.current = null;
+        if (dy < -30) step(1);
+        else if (dy > 30) step(-1);
+        else onChange(state === 'full' ? 'collapsed' : order[order.indexOf(state) + 1]);
+      }}
+    >
+      <span />
+    </button>
   );
 }

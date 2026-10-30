@@ -8,7 +8,7 @@ export interface Place {
   label: string;
   detail?: string;
   coords: LngLat;
-  kind: 'stop' | 'address' | 'location' | 'map';
+  kind: 'stop' | 'address' | 'location' | 'map' | 'home' | 'favorite';
 }
 
 const STOP_LABEL: Record<Stop['type'], string> = { ubahn: 'U-Bahn', sbahn: 'S-Bahn', tram: 'Straßenbahn', bus: 'Bus' };
