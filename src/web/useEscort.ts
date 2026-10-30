@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { escortReducer, startEscort, type EscortEvent, type EscortState } from '../core/escort';
 import type { EscortSettings } from '../core/settings';
 import type { LngLat } from '../core/types';
-import { beep, hashPin, keepScreenOn, vibrate } from './signals';
+import { alertOnce, hashPin, keepScreenOn } from './signals';
 import { load, remove, save } from './storage';
 
 export interface EscortSession {
@@ -95,18 +95,31 @@ export function useEscort() {
     };
   }, [active]);
 
-  // Rückfrage: Vibration und Ton, alle paar Sekunden wiederholt
+  // Rückfrage: Ton und Vibration, alle paar Sekunden wiederholt (dazu blinkt der Bildschirm, siehe CSS)
   const phase = session?.state.phase;
   useEffect(() => {
     if (phase !== 'prompt') return;
-    const signal = () => {
-      vibrate([500, 200, 500]);
-      beep(3);
-    };
-    signal();
-    const id = setInterval(signal, 5000);
+    alertOnce();
+    const id = setInterval(alertOnce, 4000);
     return () => clearInterval(id);
   }, [phase]);
+
+  // Wie lange war die App im Hintergrund / der Bildschirm gesperrt?
+  const [awayFor, setAwayFor] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let hiddenAt: number | null = null;
+    const onChange = () => {
+      if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+      else if (hiddenAt) {
+        const s = Math.round((Date.now() - hiddenAt) / 1000);
+        if (s >= 15) setAwayFor(s);
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, [active]);
 
   const start = useCallback(async (settings: EscortSettings, pin: string, destination: string, contactIds: string[]) => {
     const s: EscortSession = { state: startEscort(settings, Date.now()), pinHash: await hashPin(pin), destination, contactIds };
@@ -128,5 +141,5 @@ export function useEscort() {
     await Promise.all([remove(SESSION_KEY), remove(POS_KEY)]);
   }, []);
 
-  return { session, lastPos, geoError, now, dispatch, start, checkPin, end };
+  return { session, lastPos, geoError, now, dispatch, start, checkPin, end, awayFor, clearAway: () => setAwayFor(null) };
 }

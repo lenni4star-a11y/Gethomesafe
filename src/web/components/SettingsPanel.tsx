@@ -1,6 +1,7 @@
 import type { Settings } from '../../core/settings';
 import type { ParkAvoidance } from '../../core/safety';
 import { Modal } from './Modal';
+import { SoundCheck } from './SoundCheck';
 
 interface Props {
   settings: Settings;
@@ -37,6 +38,19 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
           />
         </label>
         <p className="fineprint">Wege durch oder direkt neben Parks werden nachts abgewertet, aber nie ganz ausgeschlossen.</p>
+      </section>
+
+      <section className="settings-section">
+        <h3>Ton, Stimme und Vibration</h3>
+        <SoundCheck voiceMode={settings.voice} />
+        <label className="field">
+          <span>Stimme im Anruf</span>
+          <select value={settings.voice} onChange={(e) => onChange({ ...settings, voice: e.target.value as Settings['voice'] })}>
+            <option value="auto">Automatisch (Gerätestimme, sonst Aufnahme)</option>
+            <option value="device">Nur Gerätestimme</option>
+            <option value="recording">Nur aufgenommene Stimme</option>
+          </select>
+        </label>
       </section>
 
       <section className="settings-section">

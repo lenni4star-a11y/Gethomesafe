@@ -1,102 +1,263 @@
-// Vibration, Töne und Sprachausgabe im Browser.
+// Ton, Sprache, Vibration und Bildschirm im Browser.
+//
+// Wichtig für Handys:
+// - Töne laufen über HTML-Audio-Elemente (Medienwiedergabe), nicht über die Web Audio API.
+//   So werden sie auf dem iPhone vom Lautlos-Schalter möglichst nicht stummgeschaltet.
+// - Browser erlauben Ton erst nach einem Tipp. `unlockAudio()` muss deshalb einmal direkt in einem
+//   Tipp aufgerufen werden (z. B. „Begleitung starten“). Danach dürfen die Elemente später von selbst abspielen.
+// - Sprachausgabe: deutsche Gerätestimme (de-AT, sonst de-DE), sonst vorab aufgenommene Dateien.
 
-let audio: AudioContext | null = null;
+const BASE = `${import.meta.env.BASE_URL}audio/`;
 
-function ctx(): AudioContext | null {
-  try {
-    audio ??= new AudioContext();
-    if (audio.state === 'suspended') void audio.resume();
-    return audio;
-  } catch {
-    return null;
+export type Sound = 'ringtone' | 'siren' | 'testton';
+export type VoiceClip =
+  | 'check-hallo'
+  | 'check-okay'
+  | 'check-gefuehl'
+  | 'check-weiter'
+  | 'check-hilfe'
+  | 'fake-1'
+  | 'fake-2'
+  | 'fake-3'
+  | 'fake-4'
+  | 'fake-5'
+  | 'fake-6';
+
+// Je ein festes Element pro Ton und eines für Sprache: einmal freigeschaltet, bleibt es freigeschaltet.
+const players = new Map<string, HTMLAudioElement>();
+
+function player(key: string, src?: string): HTMLAudioElement {
+  let el = players.get(key);
+  if (!el) {
+    el = new Audio();
+    el.preload = 'auto';
+    el.setAttribute('playsinline', '');
+    if (src) el.src = src;
+    players.set(key, el);
   }
+  return el;
 }
 
-/** Muss einmal durch eine Nutzer-Geste aufgerufen werden, damit Töne später erlaubt sind */
+const soundPlayer = (s: Sound) => player(s, `${BASE}${s}.mp3`);
+const voicePlayer = () => player('voice', `${BASE}check-hallo.mp3`);
+
+let unlocked = false;
+// Elemente, die gerade stumm „angespielt“ werden, um sie freizuschalten
+const priming = new Set<HTMLAudioElement>();
+
+/** Ein echtes Abspielen hat Vorrang vor dem stummen Freischalten */
+function takeOver(el: HTMLAudioElement) {
+  priming.delete(el);
+  el.muted = false;
+}
+export const isAudioUnlocked = () => unlocked;
+
+/** Muss direkt in einem Tipp aufgerufen werden. Schaltet Töne und Sprache für später frei. */
 export function unlockAudio(): void {
-  ctx();
-}
-
-export function vibrate(pattern: number[] = [400, 200, 400]): void {
+  // iPhone (Safari 16.4+): als Medienwiedergabe kennzeichnen, damit der Lautlos-Schalter nicht greift
   try {
-    navigator.vibrate?.(pattern);
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = 'playback';
   } catch {
     /* nicht unterstützt */
   }
+  for (const el of [soundPlayer('ringtone'), soundPlayer('siren'), soundPlayer('testton'), voicePlayer()]) {
+    if (!el.paused) continue;
+    el.muted = true;
+    priming.add(el);
+    el.play()
+      ?.then(() => {
+        if (!priming.has(el)) return; // inzwischen echt abgespielt
+        priming.delete(el);
+        el.pause();
+        el.currentTime = 0;
+        el.muted = false;
+      })
+      .catch(() => {
+        priming.delete(el);
+        el.muted = false;
+      });
+  }
+  // Sprachausgabe freischalten (leiser, leerer Satz) und Stimmen laden
+  if (canSpeak()) {
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    } catch {
+      /* egal */
+    }
+    void loadVoices();
+  }
+  unlocked = true;
 }
 
-export function beep(times = 3): void {
-  const c = ctx();
-  if (!c) return;
-  for (let i = 0; i < times; i++) {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.frequency.value = 880;
-    o.connect(g);
-    g.connect(c.destination);
-    const t = c.currentTime + i * 0.45;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-    o.start(t);
-    o.stop(t + 0.32);
+/** Ton in Schleife abspielen, bis die zurückgegebene Funktion aufgerufen wird */
+export function loop(sound: Sound): () => void {
+  const el = soundPlayer(sound);
+  takeOver(el);
+  el.loop = true;
+  el.volume = 1;
+  el.currentTime = 0;
+  void el.play().catch(() => {});
+  return () => {
+    el.pause();
+    el.currentTime = 0;
+    el.loop = false;
+  };
+}
+
+export function playOnce(sound: Sound): Promise<void> {
+  const el = soundPlayer(sound);
+  takeOver(el);
+  el.loop = false;
+  el.volume = 1;
+  el.currentTime = 0;
+  return new Promise((resolve) => {
+    el.onended = () => resolve();
+    el.play().catch(() => resolve());
+  });
+}
+
+// ---------------------------------------------------------------- Vibration
+
+export const canVibrate = () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+
+/** true, wenn der Browser die Vibration angenommen hat (Android). Auf dem iPhone gibt es keine Vibration für Web-Apps. */
+export function vibrate(pattern: number | number[] = [400, 200, 400]): boolean {
+  try {
+    return canVibrate() ? navigator.vibrate(pattern) : false;
+  } catch {
+    return false;
   }
 }
 
-/** Klingelton, bis die zurückgegebene Funktion aufgerufen wird */
+/** Klingeln mit Vibration in Schleife */
 export function ring(): () => void {
-  const c = ctx();
-  let stopped = false;
-  const play = () => {
-    if (stopped || !c) return;
-    for (const [f, dt] of [
-      [660, 0],
-      [880, 0.18],
-      [660, 0.6],
-      [880, 0.78],
-    ] as const) {
-      const o = c.createOscillator();
-      const g = c.createGain();
-      o.frequency.value = f;
-      o.connect(g);
-      g.connect(c.destination);
-      const t = c.currentTime + dt;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-      o.start(t);
-      o.stop(t + 0.17);
-    }
-    vibrate([600, 300, 600]);
-  };
-  play();
-  const id = window.setInterval(play, 2200);
+  const stopSound = loop('ringtone');
+  vibrate([800, 400, 800, 400, 800]);
+  const id = window.setInterval(() => vibrate([800, 400, 800, 400, 800]), 3200);
   return () => {
-    stopped = true;
+    stopSound();
     clearInterval(id);
-    vibrate([0]);
+    vibrate(0);
   };
 }
 
-export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
+/** Kurzer Alarm für die Rückfrage: Ton + Vibration */
+export function alertOnce(): void {
+  void playOnce('testton');
+  vibrate([500, 200, 500, 200, 500]);
+}
 
-export function speak(text: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (!canSpeak()) return resolve();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'de-AT';
-    const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith('de'));
-    if (voice) u.voice = voice;
-    u.rate = 0.95;
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    speechSynthesis.speak(u);
+// ---------------------------------------------------------------- Sprache
+
+export const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+
+let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+
+/** Stimmen werden in vielen Browsern erst nach und nach geladen: kurz warten */
+export function loadVoices(timeout = 2000): Promise<SpeechSynthesisVoice[]> {
+  if (!canSpeak()) return Promise.resolve([]);
+  voicesPromise ??= new Promise((resolve) => {
+    const now = speechSynthesis.getVoices();
+    if (now.length) return resolve(now);
+    const done = () => resolve(speechSynthesis.getVoices());
+    speechSynthesis.addEventListener?.('voiceschanged', done, { once: true });
+    setTimeout(done, timeout);
   });
+  return voicesPromise.then((v) => {
+    if (!v.length) voicesPromise = null; // später nochmal versuchen
+    return v;
+  });
+}
+
+export async function germanVoice(): Promise<SpeechSynthesisVoice | null> {
+  const voices = await loadVoices();
+  const de = voices.filter((v) => v.lang?.toLowerCase().replace('_', '-').startsWith('de'));
+  return (
+    de.find((v) => v.lang.toLowerCase().includes('at')) ??
+    de.find((v) => /de-de/i.test(v.lang.replace('_', '-')) && v.localService) ??
+    de.find((v) => /de-de/i.test(v.lang.replace('_', '-'))) ??
+    de[0] ??
+    null
+  );
+}
+
+// Chrome räumt laufende Sätze sonst manchmal weg, bevor sie fertig sind
+const keep: SpeechSynthesisUtterance[] = [];
+
+function speakTts(text: string, voice: SpeechSynthesisVoice): Promise<boolean> {
+  return new Promise((resolve) => {
+    let started = false;
+    let finished = false;
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = voice;
+    u.lang = voice.lang;
+    u.rate = 0.95;
+    u.volume = 1;
+    keep.push(u);
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      keep.splice(keep.indexOf(u), 1);
+      resolve(ok);
+    };
+    u.onstart = () => (started = true);
+    u.onend = () => finish(true);
+    u.onerror = () => finish(started);
+    speechSynthesis.cancel();
+    speechSynthesis.resume();
+    speechSynthesis.speak(u);
+    // Startet die Stimme nicht, auf die Aufnahme ausweichen
+    setTimeout(() => {
+      if (!started) {
+        speechSynthesis.cancel();
+        finish(false);
+      }
+    }, 1800);
+    // Sicherheitsnetz, falls „onend“ nie kommt
+    setTimeout(() => finish(true), 2500 + text.length * 110);
+  });
+}
+
+function playClip(clip: VoiceClip): Promise<boolean> {
+  const el = voicePlayer();
+  takeOver(el);
+  return new Promise((resolve) => {
+    el.onended = () => resolve(true);
+    el.onerror = () => resolve(false);
+    el.src = `${BASE}${clip}.mp3`;
+    el.volume = 1;
+    el.play().catch(() => resolve(false));
+  });
+}
+
+export type VoiceMode = 'auto' | 'device' | 'recording';
+
+/**
+ * Satz sprechen. Mit Gerätestimme, wenn eine deutsche vorhanden ist und startet; sonst Aufnahme.
+ * Ergebnis: wie gesprochen wurde ('device', 'recording') oder 'none', wenn gar nichts ging.
+ */
+export async function say(text: string, clip: VoiceClip, mode: VoiceMode = 'auto'): Promise<'device' | 'recording' | 'none'> {
+  if (mode !== 'recording' && canSpeak()) {
+    const voice = await germanVoice();
+    if (voice && (await speakTts(text, voice))) return 'device';
+    if (mode === 'device') return 'none';
+  }
+  return (await playClip(clip)) ? 'recording' : 'none';
 }
 
 export function stopSpeaking(): void {
   if (canSpeak()) speechSynthesis.cancel();
+  const v = players.get('voice');
+  if (v) {
+    v.pause();
+    v.onended?.(new Event('ended'));
+  }
 }
+
+// ---------------------------------------------------------------- Spracherkennung (optional)
 
 type Recognition = {
   lang: string;
@@ -124,7 +285,10 @@ export function listenForAnswer(): { result: Promise<boolean | null>; stop: () =
   let done = false;
   const result = new Promise<boolean | null>((resolve) => {
     rec.onresult = (e) => {
-      const text = Array.from(e.results).map((r) => r[0].transcript).join(' ').toLowerCase();
+      const text = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(' ')
+        .toLowerCase();
       done = true;
       if (/nicht gut|schlecht|hilfe|nein|angst|nicht okay|nicht ok/.test(text)) resolve(false);
       else if (/gut|okay|ok|passt|alles klar|ja/.test(text)) resolve(true);
@@ -141,16 +305,25 @@ export function listenForAnswer(): { result: Promise<boolean | null>; stop: () =
   return { result, stop: () => rec.stop() };
 }
 
-/** Bildschirm während der Begleitung anlassen (wo unterstützt) */
+// ---------------------------------------------------------------- Bildschirm
+
+type Lock = { release(): Promise<void> };
+
+/** Bildschirm wach halten (Wake Lock). Gibt eine Funktion zum Freigeben zurück. */
 export async function keepScreenOn(): Promise<() => void> {
   try {
-    const nav = navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } };
+    const nav = navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<Lock> } };
     const lock = await nav.wakeLock?.request('screen');
     return () => void lock?.release();
   } catch {
     return () => {};
   }
 }
+
+export const canKeepScreenOn = () => typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+
+export const isIOS = () =>
+  typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 /** Einfacher PIN-Hash, damit die PIN nicht im Klartext gespeichert wird */
 export async function hashPin(pin: string): Promise<string> {

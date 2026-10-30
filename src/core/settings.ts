@@ -19,12 +19,15 @@ export interface Settings {
   parkAvoidance: ParkAvoidance;
   /** Optionaler Zugangsschlüssel für Straßenfotos von Mapillary */
   mapillaryToken: string;
+  /** Stimme im simulierten Anruf: automatisch, nur Gerätestimme oder nur Aufnahme */
+  voice: 'auto' | 'device' | 'recording';
   escort: EscortSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   parkAvoidance: 2,
   mapillaryToken: '',
+  voice: 'auto',
   escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1 },
 };
 

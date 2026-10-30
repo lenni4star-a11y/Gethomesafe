@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import { secondsLeft, secondsUntilCheck, type EscortEvent } from '../../core/escort';
 import type { EscortSession, LastPosition } from '../useEscort';
+import type { VoiceMode } from '../signals';
 import { CallScreen } from './CallScreen';
 import { ContactActions, EmergencyButtons, SilentCallHint } from './EmergencyMenu';
 import { PinDialog } from './PinDialog';
@@ -17,10 +18,13 @@ interface Props {
   /** nach erfolgreicher PIN: Begleitung beenden */
   onEnd: (arrived: boolean) => void;
   onTalkCall: () => void;
+  voiceMode: VoiceMode;
+  awayFor: number | null;
+  onClearAway: () => void;
 }
 
 /** Laufende Begleitung mit Eskalationsstufen */
-export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onTalkCall }: Props) {
+export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onTalkCall, voiceMode, awayFor, onClearAway }: Props) {
   const [pinFor, setPinFor] = useState<'arrive' | 'cancel' | 'cancelAlarm' | null>(null);
   const { state } = session;
   const chosen = contacts.filter((c) => session.contactIds.includes(c.id));
@@ -48,6 +52,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
       <CallScreen
         key={state.callAttempt}
         kind="check"
+        voiceMode={voiceMode}
         caller="Gethomesafe Begleitung"
         secondsLeft={left}
         onAnswer={(ok) => dispatch({ type: 'answer', ok, now: Date.now() })}
@@ -57,7 +62,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
 
   if (state.phase === 'contact' || state.phase === 'emergency')
     return (
-      <div className="escort-alarm" role="alertdialog" aria-modal="true" aria-label="Alarm">
+      <div className="escort-alarm flash" role="alertdialog" aria-modal="true" aria-label="Alarm">
         {state.phase === 'contact' ? (
           <>
             <h2>{state.reason === 'not_ok' ? 'Lass uns Hilfe holen' : 'Du hast nicht geantwortet'}</h2>
@@ -136,15 +141,23 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
         </button>
       </div>
 
+      {awayFor !== null && (
+        <div className="notice">
+          Die App war {awayFor >= 120 ? `${Math.round(awayFor / 60)} Minuten` : `${awayFor} Sekunden`} im Hintergrund oder gesperrt. In dieser Zeit war die Begleitung pausiert.{' '}
+          <button type="button" className="link-btn" onClick={onClearAway}>
+            Verstanden
+          </button>
+        </div>
+      )}
       <p className="fineprint">
-        {geoError ?? (posAge !== null ? `Standort aktualisiert vor ${posAge} s (nur letzte Position gespeichert).` : 'Standort wird gesucht …')} Lass die App geöffnet und den Bildschirm an.
+        {geoError ?? (posAge !== null ? `Standort aktualisiert vor ${posAge} s (nur letzte Position gespeichert).` : 'Standort wird gesucht …')} Bildschirm anlassen: Bei gesperrtem Bildschirm pausiert die Begleitung.
       </p>
       <button type="button" className="link-btn" onClick={() => setPinFor('cancel')}>
         Begleitung abbrechen (PIN)
       </button>
 
       {state.phase === 'prompt' && (
-        <div className="prompt" role="alertdialog" aria-modal="true" aria-label="Alles okay?">
+        <div className="prompt flash" role="alertdialog" aria-modal="true" aria-label="Alles okay?">
           <h2>Alles okay?</h2>
           <p>Noch {left ?? 0} Sekunden, dann ruft dich deine Begleitung an.</p>
           <button type="button" className="btn ok big" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>

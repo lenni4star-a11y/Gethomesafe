@@ -9,7 +9,8 @@ interface Props {
   contacts: Contact[];
   onContactsChange: (c: Contact[]) => void;
   onClose: () => void;
-  onFakeCall: () => void;
+  /** Verzögerung in Sekunden: 0, 10 oder 30 */
+  onFakeCall: (delaySec: number) => void;
   /** Während einer Begleitung: zuletzt bekannte Position */
   lastPosition?: { coords: LngLat; time: number } | null;
 }
@@ -120,9 +121,13 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
 
       <section className="settings-section">
         <h3>Fake-Anruf</h3>
-        <button type="button" className="btn" onClick={onFakeCall}>
-          📞 Anruf jetzt simulieren
-        </button>
+        <div className="tp-row">
+          {[0, 10, 30].map((d) => (
+            <button key={d} type="button" className="chip" onClick={() => onFakeCall(d)}>
+              📞 {d === 0 ? 'Sofort' : `in ${d} s`}
+            </button>
+          ))}
+        </div>
         <p className="fineprint">Dein Telefon klingelt, eine Stimme redet mit dir. Gut, um beschäftigt zu wirken oder einfach Gesellschaft zu haben.</p>
       </section>
 

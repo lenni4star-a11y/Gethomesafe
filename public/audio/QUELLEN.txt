@@ -1,0 +1,5 @@
+Audiodateien von Gethomesafe
+
+- ringtone.mp3, siren.mp3, testton.mp3: selbst erzeugt mit scripts/make-tones.py (frei verwendbar).
+- check-*.mp3, fake-*.mp3: Sprachausgabe, erzeugt mit Piper (https://github.com/rhasspy/piper),
+  Stimme "de_DE-kerstin-low", Datensatz unter CC0. Texte in scripts/voice-lines.tsv.

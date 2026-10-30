@@ -26,6 +26,7 @@ import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
 import { useStored } from './storage';
 import { useEscort } from './useEscort';
+import { unlockAudio } from './signals';
 
 type Pick = 'start' | 'end' | 'rate' | null;
 
@@ -49,6 +50,7 @@ export function App() {
   const [contacts, setContacts] = useStored<Contact[]>('contacts', []);
   const [showSos, setShowSos] = useState(false);
   const [fakeCall, setFakeCall] = useState(false);
+  const [fakeAt, setFakeAt] = useState<number | null>(null);
   const [showEscortSetup, setShowEscortSetup] = useState(false);
   const [arrived, setArrived] = useState<string[] | null>(null);
   const escort = useEscort();
@@ -251,7 +253,10 @@ export function App() {
           contacts={contacts}
           dispatch={escort.dispatch}
           checkPin={escort.checkPin}
-          onTalkCall={() => setFakeCall(true)}
+          onTalkCall={() => (unlockAudio(), setFakeCall(true))}
+          voiceMode={settings.voice}
+          awayFor={escort.awayFor}
+          onClearAway={escort.clearAway}
           onEnd={async (didArrive) => {
             const ids = escort.session?.contactIds ?? [];
             await escort.end();
@@ -388,7 +393,12 @@ export function App() {
           contacts={contacts}
           onContactsChange={setContacts}
           onClose={() => setShowSos(false)}
-          onFakeCall={() => (setShowSos(false), setFakeCall(true))}
+          onFakeCall={(delay) => {
+            unlockAudio();
+            setShowSos(false);
+            if (delay === 0) setFakeCall(true);
+            else setFakeAt(Date.now() + delay * 1000);
+          }}
           lastPosition={escort.lastPos}
         />
       )}
@@ -457,7 +467,30 @@ export function App() {
         />
       )}
 
-      {fakeCall && <CallScreen kind="fake" caller="Sam" onHangup={() => setFakeCall(false)} />}
+      {fakeAt && <FakeCallCountdown at={fakeAt} onFire={() => (setFakeAt(null), setFakeCall(true))} onCancel={() => setFakeAt(null)} />}
+
+      {fakeCall && <CallScreen kind="fake" caller="Sam" voiceMode={settings.voice} onHangup={() => setFakeCall(false)} />}
+    </div>
+  );
+}
+
+/** Fake-Anruf zeitversetzt: kleiner Hinweis mit Abbrechen */
+function FakeCallCountdown({ at, onFire, onCancel }: { at: number; onFire: () => void; onCancel: () => void }) {
+  const [left, setLeft] = useState(Math.ceil((at - Date.now()) / 1000));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const l = Math.ceil((at - Date.now()) / 1000);
+      setLeft(l);
+      if (l <= 0) onFire();
+    }, 250);
+    return () => clearInterval(id);
+  }, [at, onFire]);
+  return (
+    <div className="fake-countdown" role="status">
+      Anruf kommt in {Math.max(0, left)} s
+      <button type="button" className="link-btn" onClick={onCancel}>
+        Abbrechen
+      </button>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import type { EscortSettings } from '../../core/settings';
-import { unlockAudio } from '../signals';
+import { canVibrate, isIOS, keepScreenOn, unlockAudio, vibrate } from '../signals';
+import { SoundCheck } from './SoundCheck';
 import { ContactsEditor } from './ContactsEditor';
+import { PinPad } from './PinPad';
 import { Modal } from './Modal';
 
 interface Props {
@@ -78,14 +80,18 @@ export function EscortSetup({ destination, contacts, onContactsChange, settings,
   const [dest, setDest] = useState(destination);
   const [selected, setSelected] = useState<string[]>(contacts.map((c) => c.id));
   const [pin, setPin] = useState('');
-  const [pin2, setPin2] = useState('');
+  const [pinStep, setPinStep] = useState<'first' | 'repeat' | null>(null);
+  const [firstPin, setFirstPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
   const [editContacts, setEditContacts] = useState(contacts.length === 0);
   const [error, setError] = useState<string | null>(null);
 
   const start = () => {
-    if (pin.length < 4) return setError('Bitte eine PIN mit mindestens 4 Ziffern festlegen.');
-    if (pin !== pin2) return setError('Die beiden PINs stimmen nicht überein.');
+    if (pin.length < 4) return setError('Bitte zuerst eine PIN festlegen.');
+    // Direkt im Tipp: Ton, Sprache, Vibration und wacher Bildschirm freischalten
     unlockAudio();
+    vibrate(150);
+    void keepScreenOn();
     onStart(pin, dest.trim() || 'nach Hause', selected.filter((id) => contacts.some((c) => c.id === id)));
   };
 
@@ -142,24 +148,54 @@ export function EscortSetup({ destination, contacts, onContactsChange, settings,
       <section className="settings-section">
         <h3>PIN zum Beenden</h3>
         <p className="fineprint">Mit dieser PIN beendest du die Begleitung oder brichst einen Fehlalarm ab. So kann das niemand anderes einfach tun.</p>
-        <div className="pin-row">
-          <label className="field">
-            <span>PIN</span>
-            <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} className="pin-input" />
-          </label>
-          <label className="field">
-            <span>PIN wiederholen</span>
-            <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))} className="pin-input" />
-          </label>
-        </div>
+        <button type="button" className="btn" onClick={() => (setPinError(null), setPinStep('first'))}>
+          {pin ? '✓ PIN festgelegt · ändern' : 'PIN festlegen'}
+        </button>
+      </section>
+
+      <section className="settings-section">
+        <h3>Vorher kurz testen</h3>
+        <p className="fineprint">
+          <b>Medienlautstärke hochdrehen</b> (Lautstärketaste drücken, während der Testton läuft). Rückfragen und Anrufe sollen laut sein, auch zur Abschreckung.
+        </p>
+        <SoundCheck voiceMode="auto" />
+        {(isIOS() || !canVibrate()) && (
+          <p className="fineprint">
+            Auf dem iPhone können Web-Apps nicht vibrieren. Stattdessen gibt es einen lauten Ton, einen blinkenden Bildschirm und eine große Anzeige.
+          </p>
+        )}
       </section>
 
       <div className="notice">
-        <b>Bitte beachten:</b> Das ist ein Prototyp. Bei gesperrtem Bildschirm oder im Hintergrund funktioniert die Begleitung nicht zuverlässig. Lass die App offen. Dein Standort wird nur während der
-        Begleitung verwendet, gespeichert wird nur die letzte Position, und beim Beenden wird sie gelöscht. <b>Kein Ersatz für den Notruf.</b>
+        <b>Wichtig: Bildschirm anlassen.</b> Die App hält den Bildschirm wach. Sperrst du ihn oder wechselst du in eine andere App, pausiert der Browser die Begleitung: keine Rückfragen,
+        kein Ton, kein Standort. Kommst du zurück, holt die App verpasste Rückfragen sofort nach. Dein Standort wird nur während der Begleitung verwendet, gespeichert wird nur die letzte
+        Position, beim Beenden wird sie gelöscht. <b>Kein Ersatz für den Notruf.</b>
       </div>
 
       {error && <p className="message">{error}</p>}
+      {pinStep && (
+        <PinPad
+          title={pinStep === 'first' ? 'PIN festlegen' : 'PIN wiederholen'}
+          text={pinStep === 'first' ? 'Mindestens 4 Ziffern. Damit beendest du die Begleitung.' : 'Bitte gib die PIN noch einmal ein.'}
+          confirmLabel={pinStep === 'first' ? 'Weiter' : 'Speichern'}
+          error={pinError}
+          onCancel={() => setPinStep(null)}
+          onSubmit={(p) => {
+            if (pinStep === 'first') {
+              setFirstPin(p);
+              setPinError(null);
+              setPinStep('repeat');
+            } else if (p === firstPin) {
+              setPin(p);
+              setError(null);
+              setPinStep(null);
+            } else {
+              setPinError('Die PINs stimmen nicht überein. Bitte neu festlegen.');
+              setPinStep('first');
+            }
+          }}
+        />
+      )}
       <button type="button" className="btn primary big" onClick={start}>
         Begleitung starten
       </button>
