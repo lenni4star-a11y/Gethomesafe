@@ -14,6 +14,8 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Vor neuen Diensten mit Kosten oder Accounts fragen.**
 - App-Sprache: Deutsch, gendergerecht, freundlich und ruhig.
 - Testen am Handy: Die App wird bei jedem Push auf `main` automatisch auf GitHub Pages veröffentlicht: https://lenni4star-a11y.github.io/Gethomesafe/ (Workflow `.github/workflows/pages.yml`). Lokal mit https: `npm run dev:https`.
+- Immer auf iPhone (Safari) und Android (Chrome), im Hoch- und Querformat und auf kleinem Bildschirm (z. B. iPhone SE) prüfen. In der Cloud-Umgebung gibt es nur einen Test-Chrome mit Handy-Größe; echte Geräte-Tests (Ton, Vibration, Lautlos-Schalter) muss die Projektinhaber·in machen – das ehrlich sagen.
+- **Geheimnisse nie ins Repo:** Mapillary-Token nur in `.env` (lokal, in `.gitignore`) bzw. als GitHub-Secret `MAPILLARY_TOKEN`. Token nicht im Chat erfragen.
 
 ## Rahmen und Technik
 - **Prototyp als PWA** (Vite + React + TypeScript, Karte: MapLibre GL mit OpenFreeMap-Stil). Später **native App (Expo/React Native)**.
@@ -39,15 +41,18 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Wochentag und Uhrzeit:** Losgeh-Zeit frei wählbar (Tag + Uhrzeit + Schnellwahl wie „Sa 2:00“). Öffnungszeiten und Bewertungen werden für genau diese Zeit ausgewertet.
 - **Offene Orte am Weg** (bis 50 m): Liste in den Details (gruppiert, mit „bis wann geöffnet“) und Symbole auf der Karte.
 - **Parks:** nachts Wege durch oder direkt neben Parks abwerten, nie verbieten. Stärke in den Einstellungen (egal / leicht / normal / stark).
-- **Vorschau:** Mapillary-Straßenfotos zum Durchklicken oder Abspielen, wenn in den Einstellungen ein Mapillary-Zugangsschlüssel eingetragen ist; sonst Kamerafahrt über die Karte, deutlich als „Kartenfahrt (keine Fotos)“ gekennzeichnet.
+- **Routen-Menü als Bottom Sheet** mit drei Stufen: eingeklappt (Leiste „Wohin?“ bzw. Routen-Zusammenfassung + 🏠), halb, ganz offen. Klappt automatisch ein bei Kartentipp, fertiger Route, Auswahl auf der Karte und Bewerten (Bewerten-Dialog hat Vorrang). Querformat: Seitenleiste.
+- **Zuhause:** speichern per Suche, Karte oder Standort (Einstellungen, einmaliger Hinweis beim ersten Start). Haus-Knopf plant sofort die sicherste Route nach Hause. Lieblingsorte als Schnellwahl-Chips. Bei der Begleitung ist Zuhause als Ziel vorausgewählt. **Datenschutz:** nur lokal, nie in Bewertungen, auf einem Server oder in Nachrichten an Kontakte (die bekommen nur den aktuellen Standort); auf der Karte nur ein neutrales, ausblendbares Symbol ohne Beschriftung; Knopf „Zuhause löschen“.
+- **Straßenansicht (Mapillary):** Token aus `.env` (`VITE_MAPILLARY_TOKEN`), beim Veröffentlichen aus dem Secret `MAPILLARY_TOKEN`; optional eigener Schlüssel in den Einstellungen.
+  - „Weg ansehen“: Fotos entlang der Route in Gehrichtung wie ein Spaziergang; Abspielen/Pause, vor/zurück, Geschwindigkeit, Fortschrittsbalken, Mini-Karte mit Position und Abschnittsfarbe; Lücken anzeigen und dort Kamerafahrt über die Karte; Nachtfotos bevorzugen, Aufnahmedatum zeigen.
+  - Umschalter „Karte / Straße“: Vollbild-Foto mit Gehen (vor/zurück) und Drehen, Mini-Karte in der Ecke, Foto-Ebene (grüne Linien) auf der Karte; Bewerten mit passendem Foto (nur Foto-ID wird gespeichert).
+  - Namensnennung unter jedem Foto: Urheber·in, Link zu Mapillary, CC BY-SA 4.0. Bei Fehler/Limit freundlicher Hinweis und Rückfall auf die Karte.
 - Gewichte stehen in `src/core/safety.ts`.
 
-### Notfall-Menü (auf jeder Ansicht, SOS-Knopf)
-- Eigene Notfallkontakte anlegen/bearbeiten, mit einem Tipp anrufen, SMS/WhatsApp mit aktuellem Standort öffnen (Absenden immer selbst).
-- Knöpfe 133 Polizei, 144 Rettung, 112 Euronotruf.
-- Hilfsstellen nur mit geprüfter Nummer und Quelle (`src/core/helplines.ts`, Stand Oktober 2026, regelmäßig prüfen): 24-Stunden Frauennotruf der Stadt Wien 01 71 71 9, Frauenhelpline 0800 222 555, Opfer-Notruf 0800 112 112, Sozialpsychiatrischer Notdienst 01 31330, Telefonseelsorge 142, Rat auf Draht 147, Polizei-SMS 0800 133 133. Ein Heimwegtelefon speziell für Wien wurde nicht gefunden (das NÖ-Heimwegtelefon gilt nur für Niederösterreich).
-- Hinweis und Links zur offiziellen Notruf-App **DEC112** mit stillem Notruf.
-- Fake-Anruf jederzeit startbar.
+### Notfall-Menü (SOS-Knopf)
+- Der **SOS-Knopf ist in allen Ansichten sichtbar und wird nie verdeckt** (liegt über allen Dialogen; nur Anruf-, PIN- und Alarm-Bildschirm liegen darüber). Mit einer Hand bedienbar.
+- Bereiche: **NOTRUF** (oben, rot, groß: 133 Polizei, 144 Rettung, 112 Euronotruf, Hinweis auf DEC112 mit stillem Notruf) – **HILFE UND REDEN** (je ein Satz, wofür, und ob 24 h erreichbar) – **MEINE KONTAKTE** (anrufen, SMS/WhatsApp mit aktuellem Standort, Absenden immer selbst) – **FAKE-ANRUF** (sofort, in 10 s, in 30 s) – **ALARM** (unten, sehr laute Sirene in Schleife + blinkender Bildschirm, 112-Knopf).
+- Hilfsstellen nur mit geprüfter Nummer und Quelle, zentral in `src/core/helplines.ts` (Stand Oktober 2026, regelmäßig prüfen): 24-Stunden Frauennotruf der Stadt Wien 01 71 71 9, Frauenhelpline 0800 222 555, Telefonseelsorge 142, Opfer-Notruf 0800 112 112, COURAGE (LGBTIQ*-Beratung, nicht 24 h) 01 585 69 66, Sozialpsychiatrischer Notdienst 01 31330, Rat auf Draht 147, Polizei-SMS 0800 133 133. Nicht aufgenommen, weil nur in Fremdquellen gefunden: Türkis Rosa Lila Villa, Queer Base. Ein Heimwegtelefon speziell für Wien wurde nicht gefunden (das NÖ-Heimwegtelefon gilt nur für Niederösterreich).
 
 ### Begleitmodus
 - Modi „Knopf gedrückt halten“ und „regelmäßig bestätigen“ (Intervall einstellbar).
@@ -56,8 +61,18 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - Antwortzeit und Anzahl der Anrufversuche einstellbar.
 - „Ich bin angekommen“ beendet (optional Kontakt benachrichtigen); Beenden und Fehlalarm-Abbruch nur mit **PIN** (nur als Hash gespeichert).
 - **Datenschutz:** Standort nur während der Begleitung, gespeichert wird nur die letzte Position, beim Ende wird alles gelöscht.
-- Ehrlicher Hinweis: Prototyp, nicht zuverlässig bei gesperrtem Bildschirm, **kein Ersatz für den Notruf**.
+- Ehrlicher Hinweis in der App: Bei gesperrtem Bildschirm oder anderer App pausiert der Browser die Begleitung (keine Rückfragen, kein Ton, kein Standort); beim Zurückkommen werden verpasste Rückfragen sofort nachgeholt und die Pause angezeigt. **Kein Ersatz für den Notruf**.
+- Eingeklappt zeigt die Begleitung nur Ziel, Dauer, **Restweg** (aus geplanter Route und letzter Position) und den Bestätigen-Knopf.
 - Logik in `src/core/escort.ts` (reiner Zustandsautomat, getestet).
+
+### Ton, Stimme, Vibration (`src/web/signals.ts`)
+- Beim Start der Begleitung bzw. beim ersten Tipp **Audio und Sprachausgabe freischalten** (`unlockAudio()` direkt im Tipp), **Wake Lock** anfordern.
+- Töne (Klingelton, Sirene, Testton) über **HTML-Audio-Elemente** (Medienwiedergabe), nicht über die Web Audio API; auf dem iPhone zusätzlich `navigator.audioSession.type = 'playback'`, damit der Lautlos-Schalter möglichst nicht greift. Klingelton/Sirene selbst erzeugt (`scripts/make-tones.py`, frei verwendbar), laut, in Schleife bis Annehmen/Ablehnen.
+- Sprache: Stimmen laden abwarten, deutsche Gerätestimme (de-AT, sonst de-DE); Rückfall auf aufgenommene Sätze in `public/audio/` (Piper, Stimme „kerstin“, CC0, Texte in `scripts/voice-lines.tsv`). **Untertitel immer anzeigen.** Einstellung „Stimme im Anruf“: automatisch / nur Gerät / nur Aufnahme.
+- Realistischer Anruf-Bildschirm (Annehmen/Ablehnen, Gesprächszeit, Untertitel).
+- Testknöpfe in den Einstellungen (Ton, Vibration, Stimme) und Erinnerung an hohe Medienlautstärke beim Start der Begleitung.
+- Vibration (Android): wird im Tipp beim Start angestoßen, Testknopf meldet, ob der Browser sie angenommen hat. **iPhone: keine Vibration für Web-Apps** – Ersatz: lauter Ton, rot blinkender Bildschirm, großes Overlay, einmalige Erklärung beim Start.
+- **PIN-Eingabe wie eine Handy-Sperre** (`PinPad`): Punkte oben mittig, Ziffernblock 3×4 zentriert, „Bestätigen“ unten über die ganze Breite, große Tasten, auch auf kleinen Bildschirmen und im Querformat; auch zum Festlegen der PIN.
 
 ### Bewertungen
 - Wegstücke, Orte und Haltestellen bewerten: Sicherheitsgefühl 1–5, Wochentag und Uhrzeit automatisch (änderbar), Gründe zur Auswahl (dunkel, menschenleer, belebt, gut einsehbar, unangenehme Situation/bedrängt, Belästigung erlebt), optionale Notiz (sanfter Hinweis, wenn Personengruppen beschrieben werden).
@@ -72,7 +87,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - Datenschutz-Seite in einfacher Sprache.
 
 ## Später (jetzt nicht umsetzen)
-- Native App mit Standort im Hintergrund und echten Benachrichtigungen.
+- **Native App:** Standort und Begleitung im Hintergrund bzw. bei gesperrtem Bildschirm, echte Benachrichtigungen, **Vibration auch auf dem iPhone**, Klingelton/Alarm unabhängig vom Lautlos-Schalter, automatischer SMS-Versand an Kontakte (mit Zustimmung).
 - Echter KI-Anruf mit Sprachdialog (auch als echter Telefonanruf).
 - Polizei als letzte Eskalationsstufe nur über offiziellen Weg (Leitstelle oder offizieller stiller Notruf), nie automatischer KI-Anruf bei 133.
 - Gemeinsame Bewertungen über einen Server, mit Moderation.

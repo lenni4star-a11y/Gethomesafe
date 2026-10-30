@@ -86,6 +86,12 @@ Einmalige Einrichtung (Repo muss öffentlich sein, sonst braucht GitHub Pages ei
 2. Repo → **Settings** → **Pages** → bei „Source“ **GitHub Actions** wählen
 3. Repo → **Actions** → „App veröffentlichen“ → **Run workflow**. Nach 1 bis 2 Minuten ist die App online
 
+## Straßenfotos (Mapillary) einrichten
+
+1. Kostenlosen „Client Token“ erstellen: https://www.mapillary.com/dashboard/developers
+2. **Lokal:** `.env.example` zu `.env` kopieren und den Token bei `VITE_MAPILLARY_TOKEN=` eintragen. `.env` wird nie hochgeladen.
+3. **Online (für alle Nutzer·innen):** GitHub → Repo → Settings → Secrets and variables → Actions → „New repository secret“, Name `MAPILLARY_TOKEN`, Wert = Token. Danach unter Actions „App veröffentlichen“ neu starten.
+
 ## Befehle
 
 | Befehl | Was er macht |
