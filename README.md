@@ -76,7 +76,15 @@ Der Standort funktioniert im Browser nur über **https**. Zwei Möglichkeiten:
 3. In der Ausgabe steht eine Zeile `Network: https://192.168.x.x:5173`. Diese Adresse am Handy öffnen
 4. Der Browser warnt vor dem Zertifikat (das ist ein selbst erstelltes Test-Zertifikat). „Erweitert“ → „Trotzdem fortfahren“ wählen
 
-**B) Online stellen** (z. B. GitHub Pages, Netlify oder Cloudflare Pages): dann reicht ein Link. Dafür ist eine Entscheidung nötig, siehe Phase-1-Rückmeldung.
+**B) Online über GitHub Pages (empfohlen)**
+
+Die App wird bei jeder Änderung auf `main` automatisch veröffentlicht unter
+**https://lenni4star-a11y.github.io/Gethomesafe/**. Diesen Link einfach am Handy öffnen oder an Testpersonen schicken.
+
+Einmalige Einrichtung (Repo muss öffentlich sein, sonst braucht GitHub Pages ein Bezahl-Abo):
+1. Repo → **Settings** → **General** → ganz unten „Danger Zone“ → **Change visibility** → **Make public**
+2. Repo → **Settings** → **Pages** → bei „Source“ **GitHub Actions** wählen
+3. Repo → **Actions** → „App veröffentlichen“ → **Run workflow**. Nach 1 bis 2 Minuten ist die App online
 
 ## Befehle
 
