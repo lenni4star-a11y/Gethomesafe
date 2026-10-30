@@ -47,6 +47,8 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
   - „Weg ansehen“: Fotos entlang der Route in Gehrichtung wie ein Spaziergang; Abspielen/Pause, vor/zurück, Geschwindigkeit, Fortschrittsbalken, Mini-Karte mit Position und Abschnittsfarbe; Lücken anzeigen und dort Kamerafahrt über die Karte; Nachtfotos bevorzugen, Aufnahmedatum zeigen.
   - Umschalter „Karte / Straße“: Vollbild-Foto mit Gehen (vor/zurück) und Drehen, Mini-Karte in der Ecke, Foto-Ebene (grüne Linien) auf der Karte; Bewerten mit passendem Foto (nur Foto-ID wird gespeichert).
   - Namensnennung unter jedem Foto: Urheber·in, Link zu Mapillary, CC BY-SA 4.0. Bei Fehler/Limit freundlicher Hinweis und Rückfall auf die Karte.
+  - Technik: Mapillary lehnt in dichten Gegenden große Abfrage-Rechtecke ab („Please reduce the amount of data“). Deshalb Abfragen à ca. 100 m, bei Ablehnung automatisch vierteln. Vor/Zurück in der Straßenansicht folgt der Fotoreihe (`sequence`, `image_ids`), sonst Umgebungssuche.
+  - Stand 30.10.2026: Secret `MAPILLARY_TOKEN` ist eingetragen und funktioniert in der veröffentlichten Version (geprüft mit echten Daten).
 - Gewichte stehen in `src/core/safety.ts`.
 
 ### Notfall-Menü (SOS-Knopf)
