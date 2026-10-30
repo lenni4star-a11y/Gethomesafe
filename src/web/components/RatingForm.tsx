@@ -8,6 +8,8 @@ interface Props {
   coords: LngLat;
   /** Vorschlag für Wochentag/Uhrzeit (z. B. gewählte Losgeh-Zeit), sonst jetzt */
   when?: Date;
+  /** passendes Straßenfoto (aus der Straßenansicht) */
+  photo?: { id: string; url: string } | null;
   onSave: (r: Omit<Rating, 'id' | 'version' | 'createdAt'>) => void;
   onClose: () => void;
 }
@@ -18,7 +20,7 @@ const FACES = ['', '😟', '🙁', '😐', '🙂', '😌'];
 const TARGET_LABEL: Record<RatingTarget['type'], string> = { edge: 'Wegstück', stop: 'Haltestelle', place: 'Ort' };
 
 /** Abschnitt, Ort oder Station bewerten */
-export function RatingForm({ target, coords, when, onSave, onClose }: Props) {
+export function RatingForm({ target, coords, when, photo, onSave, onClose }: Props) {
   const start = when ?? new Date();
   const [score, setScore] = useState<Rating['score'] | null>(null);
   const [weekday, setWeekday] = useState(start.getDay());
@@ -29,6 +31,7 @@ export function RatingForm({ target, coords, when, onSave, onClose }: Props) {
 
   return (
     <Modal title="Wie sicher hast du dich gefühlt?" onClose={onClose}>
+      {photo && <img className="rating-photo" src={photo.url} alt="Straßenfoto der Stelle" />}
       <p className="muted">
         {TARGET_LABEL[target.type]}: <b>{target.name || 'ohne Namen'}</b>
       </p>
@@ -94,7 +97,7 @@ export function RatingForm({ target, coords, when, onSave, onClose }: Props) {
         type="button"
         className="btn primary big"
         disabled={score === null}
-        onClick={() => score && onSave({ target, coords, score, weekday, hour, reasons, note: note.trim() })}
+        onClick={() => score && onSave({ target, coords, score, weekday, hour, reasons, note: note.trim(), ...(photo ? { photoId: photo.id } : {}) })}
       >
         Bewertung speichern
       </button>

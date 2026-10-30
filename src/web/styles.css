@@ -2070,3 +2070,237 @@ a.btn {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------- Runde 3, Block E: Straßenansicht */
+
+.view-toggle {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 66px);
+  right: 56px;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(21, 19, 31, 0.88);
+  border: 1px solid var(--border);
+}
+
+.view-toggle button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.view-toggle button.active {
+  background: var(--accent);
+  color: #120f1f;
+  font-weight: 700;
+}
+
+.street-preview,
+.street-view {
+  z-index: 22;
+}
+
+.street-view {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px calc(env(safe-area-inset-bottom) + 12px);
+  background: #000;
+}
+
+.sv-image {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0b0a10;
+}
+
+.sv-image img,
+.sp-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sv-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.sv-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(21, 19, 31, 0.85);
+}
+
+.sv-message {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(21, 19, 31, 0.9);
+  font-size: 0.9rem;
+}
+
+.sv-controls,
+.sp-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.sv-controls .btn,
+.sp-controls .btn {
+  min-height: 52px;
+}
+
+.sp-controls .speed {
+  flex: none;
+  width: 64px;
+}
+
+.minimap {
+  overflow: hidden;
+}
+
+.sp-mini,
+.sv-mini {
+  position: absolute;
+  width: 34%;
+  max-width: 180px;
+  aspect-ratio: 1;
+  bottom: 10px;
+  right: 10px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.sv-mini {
+  top: 10px;
+  left: 10px;
+  bottom: auto;
+  right: auto;
+}
+
+.sp-gapmap {
+  position: absolute;
+  inset: 0;
+}
+
+.mini-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent-strong);
+  box-shadow: 0 -10px 0 -5px var(--accent-strong);
+}
+
+.sp-date {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(21, 19, 31, 0.85);
+  font-size: 0.8rem;
+}
+
+.sp-top {
+  gap: 10px;
+}
+
+.cls-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #120f1f;
+}
+
+.cls-good {
+  background: #4fd18b;
+}
+
+.cls-medium {
+  background: #ffd166;
+}
+
+.cls-bad {
+  background: #ff5c7a;
+}
+
+.sp-seek {
+  width: 100%;
+  accent-color: var(--accent-strong);
+  min-height: 32px;
+}
+
+.sp-bottom {
+  display: grid;
+  gap: 2px;
+}
+
+.sp-bottom .link-btn {
+  justify-self: start;
+  padding-left: 0;
+  font-size: 1rem;
+}
+
+.sp-bottom .fineprint a {
+  color: var(--accent);
+}
+
+.rating-photo {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .street-view,
+  .street-preview {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    grid-template-rows: auto 1fr auto auto;
+    column-gap: 12px;
+  }
+  .street-view .sv-image,
+  .street-preview .sp-image {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+  }
+  .street-preview .sp-top,
+  .sp-seek,
+  .sv-controls,
+  .sp-controls,
+  .sp-bottom {
+    grid-column: 2;
+  }
+  .sv-controls,
+  .sp-controls {
+    flex-wrap: wrap;
+  }
+}
+
+.sp-bottom {
+  padding-right: 92px;
+}

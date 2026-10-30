@@ -27,6 +27,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Mapillary Client Token aus den Repository-Secrets (Settings → Secrets and variables → Actions)
+          VITE_MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

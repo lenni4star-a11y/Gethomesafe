@@ -40,6 +40,8 @@ export interface Rating {
   hour: number;
   reasons: Reason[];
   note: string;
+  /** optional: Mapillary-Foto, auf dem bewertet wurde (keine Personendaten) */
+  photoId?: string;
   createdAt: string;
 }
 

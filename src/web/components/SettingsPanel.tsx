@@ -2,6 +2,7 @@ import type { Settings } from '../../core/settings';
 import type { ParkAvoidance } from '../../core/safety';
 import { Modal } from './Modal';
 import { SoundCheck } from './SoundCheck';
+import { BUILT_IN_TOKEN } from '../mapillary';
 
 interface Props {
   settings: Settings;
@@ -68,7 +69,10 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
           />
         </label>
         <p className="fineprint">
-          Mit einem kostenlosen Schlüssel von Mapillary zeigt die Vorschau echte Straßenfotos. Ohne Schlüssel gibt es eine Kamerafahrt über die Karte. Der Schlüssel bleibt nur auf diesem Gerät.
+          {BUILT_IN_TOKEN
+            ? 'Die Straßenfotos sind für alle eingerichtet. Hier nur einen eigenen Schlüssel eintragen, wenn du einen anderen verwenden möchtest.'
+            : 'In dieser Version ist noch kein Schlüssel eingebaut. Mit einem eigenen kostenlosen Mapillary-Schlüssel siehst du trotzdem Straßenfotos.'}{' '}
+          Ein hier eingetragener Schlüssel bleibt nur auf diesem Gerät.
         </p>
       </section>
 

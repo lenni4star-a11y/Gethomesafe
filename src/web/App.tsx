@@ -23,6 +23,8 @@ import { PlaceInput } from './components/PlaceInput';
 import { RouteDetails } from './components/RouteDetails';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StreetPreview } from './components/StreetPreview';
+import { StreetView } from './components/StreetView';
+import { coverageTiles, mapillaryToken, type Photo } from './mapillary';
 import { TimePicker } from './components/TimePicker';
 import { getPlanner, getStops } from './data';
 import { formatDistance, formatDuration, formatTime } from './format';
@@ -64,7 +66,10 @@ export function App() {
   const [ratings, setRatings] = useStored<Rating[]>('ratings', []);
   const [ratingsView, setRatingsView] = useStored<RatingsView>('ratingsView', 'time');
   const [showRatings, setShowRatings] = useState(false);
-  const [draft, setDraft] = useState<{ target: RatingTarget; coords: LngLat } | null>(null);
+  const [draft, setDraft] = useState<{ target: RatingTarget; coords: LngLat; photo?: Photo | null } | null>(null);
+  /** Karte oder Straßenansicht */
+  const [streetMode, setStreetMode] = useState(false);
+  const [streetAt, setStreetAt] = useState<LngLat | null>(null);
   const [home, setHome] = useStored<Place | null>('home', null);
   const [favorites, setFavorites] = useStored<Place[]>('favorites', []);
   const [homePromptDone, setHomePromptDone] = useStored<boolean>('homePromptDone', false);
@@ -168,6 +173,21 @@ export function App() {
     [planner],
   );
 
+  const mlyToken = mapillaryToken(settings.mapillaryToken);
+
+  /** Bewerten-Dialog für eine Stelle öffnen (optional mit Foto aus der Straßenansicht) */
+  const rateAt = useCallback(
+    (coords: LngLat, photo: Photo | null = null) => {
+      setSheet('collapsed');
+      resolveTarget(coords).then((target) => setDraft({ target, coords, photo }));
+    },
+    [resolveTarget],
+  );
+
+  useEffect(() => {
+    map.current?.setPhotoCoverage(streetMode && mlyToken ? coverageTiles(mlyToken) : null);
+  }, [streetMode, mlyToken]);
+
   useEffect(() => {
     map.current?.showPlan(plan, selected, planTime);
   }, [plan, selected, planTime]);
@@ -198,6 +218,7 @@ export function App() {
       if (!pick) {
         setSheet('collapsed');
         setEscortCompact(true);
+        if (streetMode) setStreetAt(p);
         return;
       }
       setSheet('collapsed');
@@ -209,7 +230,7 @@ export function App() {
       }
       if (pick === 'rate') {
         setPick(null);
-        resolveTarget(p).then((target) => setDraft({ target, coords: p }));
+        rateAt(p);
         return;
       }
       const place: Place = { label: pick === 'start' ? 'Punkt auf der Karte (Start)' : 'Punkt auf der Karte (Ziel)', coords: p, kind: 'map' };
@@ -217,7 +238,7 @@ export function App() {
       else setEnd(place);
       setPick(null);
     },
-    [pick, resolveTarget],
+    [pick, rateAt, streetMode],
   );
 
   /** Sofort die sicherste Route nach Hause planen */
@@ -268,6 +289,32 @@ export function App() {
       </button>
 
       {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
+
+      <div className="view-toggle" role="radiogroup" aria-label="Ansicht">
+        <button type="button" role="radio" aria-checked={!streetMode} className={!streetMode ? 'active' : ''} onClick={() => setStreetMode(false)}>
+          Karte
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={streetMode}
+          className={streetMode ? 'active' : ''}
+          onClick={() => {
+            setStreetMode(true);
+            setSheet('collapsed');
+          }}
+        >
+          📷 Straße
+        </button>
+      </div>
+      {streetMode && !streetAt && (
+        <div className="pick-banner" role="status">
+          {mlyToken ? 'Straßenansicht: Tippe auf eine Stelle der Karte (grüne Linien = Fotos vorhanden).' : 'Die Straßenfotos sind in dieser Version noch nicht eingerichtet.'}
+          <button type="button" className="link-btn" onClick={() => setStreetMode(false)}>
+            Zur Karte
+          </button>
+        </div>
+      )}
 
       {pick && (
         <div className="pick-banner" role="status">
@@ -467,10 +514,13 @@ export function App() {
       {photos && chosen && (
         <StreetPreview
           route={chosen}
-          token={settings.mapillaryToken}
+          token={mlyToken}
           onClose={() => setPhotos(false)}
           onMapFlight={fly}
-          onOpenSettings={() => (setPhotos(false), setShowSettings(true))}
+          onRate={(coords, photo) => {
+            setPhotos(false);
+            rateAt(coords, photo);
+          }}
         />
       )}
 
@@ -574,10 +624,15 @@ export function App() {
         />
       )}
 
+      {streetAt && mlyToken && (
+        <StreetView token={mlyToken} start={streetAt} segments={chosen?.segments} onClose={() => setStreetAt(null)} onRate={(coords, photo) => rateAt(coords, photo)} />
+      )}
+
       {draft && (
         <RatingForm
           target={draft.target}
           coords={draft.coords}
+          photo={draft.photo}
           when={customTime ?? undefined}
           onClose={() => setDraft(null)}
           onSave={(r) => {

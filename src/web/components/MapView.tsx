@@ -30,6 +30,9 @@ export interface MapHandle {
   setRatings(points: RatingPoint[]): void;
   /** Zuhause als neutrales Symbol (ohne Beschriftung), null = ausblenden */
   setHome(p: LngLat | null): void;
+  /** Ebene „hier gibt es Straßenfotos“ (Mapillary), null = aus */
+  setPhotoCoverage(tilesUrl: string | null): void;
+  center(): LngLat;
   flyAlong(route: RouteSummary, onDone: () => void): void;
   stopFly(): void;
   focus(p: LngLat, zoom?: number): void;
@@ -214,6 +217,30 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
       };
       set('start', start);
       set('end', end);
+    },
+
+    setPhotoCoverage(tilesUrl) {
+      ready.current?.then(() => {
+        const map = mapRef.current!;
+        if (map.getLayer('mly-seq')) map.removeLayer('mly-seq');
+        if (map.getLayer('mly-img')) map.removeLayer('mly-img');
+        if (map.getSource('mly')) map.removeSource('mly');
+        if (!tilesUrl) return;
+        map.addSource('mly', { type: 'vector', tiles: [tilesUrl], minzoom: 6, maxzoom: 14 });
+        map.addLayer(
+          { id: 'mly-seq', type: 'line', source: 'mly', 'source-layer': 'sequence', minzoom: 12, paint: { 'line-color': '#35af6d', 'line-width': 2, 'line-opacity': 0.75 } },
+          'route-other',
+        );
+        map.addLayer(
+          { id: 'mly-img', type: 'circle', source: 'mly', 'source-layer': 'image', minzoom: 16, paint: { 'circle-color': '#35af6d', 'circle-radius': 3 } },
+          'route-other',
+        );
+      });
+    },
+
+    center() {
+      const c = mapRef.current!.getCenter();
+      return [c.lng, c.lat];
     },
 
     setHome(p) {
