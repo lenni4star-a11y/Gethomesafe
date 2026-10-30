@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ColorSegment } from '../../core/analysis';
 import { bearing, distance, turnAngle } from '../../core/geo';
 import type { LngLat } from '../../core/types';
-import { mapillaryErrorText, photoPageUrl, photosNear, type Photo } from '../mapillary';
+import { mapillaryErrorText, nextInSequence, photoPageUrl, photosNear, type Photo } from '../mapillary';
 import { MiniMap } from './MiniMap';
 
 interface Props {
@@ -27,7 +27,7 @@ export function StreetView({ token, start, segments, onClose, onRate }: Props) {
       ctrl.current = new AbortController();
       setBusy(true);
       try {
-        const list = await photosNear(p, token, 80, ctrl.current.signal);
+        const list = await photosNear(p, token, 60, ctrl.current.signal);
         if (!list.length) {
           setMessage('Hier gibt es leider keine Fotos. Tippe auf der Mini-Karte auf eine andere Stelle, oder schließe die Straßenansicht.');
           return;
@@ -55,21 +55,28 @@ export function StreetView({ token, start, segments, onClose, onRate }: Props) {
     setBusy(true);
     try {
       const want = dir === 'forward' ? heading : (heading + 180) % 360;
-      const list = await photosNear(photo.coords, token, 45);
-      let best: Photo | null = null;
-      let bestScore = Infinity;
-      for (const p of list) {
-        if (p.id === photo.id) continue;
-        const d = distance(photo.coords, p.coords);
-        if (d < 3 || d > 40) continue;
-        const ang = Math.abs(turnAngle(want, bearing(photo.coords, p.coords)));
-        if (ang > 50) continue;
-        const score = ang / 2 + Math.abs(d - 12);
-        if (score < bestScore) {
-          bestScore = score;
-          best = p;
+      // Zuerst der Fotoreihe folgen (wie Street View), sonst in der Umgebung suchen
+      const inSeq = await nextInSequence(photo, want, token);
+      const list = inSeq ? [] : await photosNear(photo.coords, token, 55);
+      // Erst eng in Blickrichtung suchen, dann großzügiger
+      const pick = (maxAngle: number, maxDist: number) => {
+        let best: Photo | null = null;
+        let bestScore = Infinity;
+        for (const p of list) {
+          if (p.id === photo.id) continue;
+          const d = distance(photo.coords, p.coords);
+          if (d < 2 || d > maxDist) continue;
+          const ang = Math.abs(turnAngle(want, bearing(photo.coords, p.coords)));
+          if (ang > maxAngle) continue;
+          const score = ang / 2 + Math.abs(d - 10);
+          if (score < bestScore) {
+            bestScore = score;
+            best = p;
+          }
         }
-      }
+        return best;
+      };
+      const best = inSeq ?? pick(45, 35) ?? pick(75, 55);
       if (best) {
         setPhoto(best);
         // Blickrichtung beibehalten, wenn das neue Foto ungefähr in die gleiche Richtung zeigt
@@ -104,8 +111,9 @@ export function StreetView({ token, start, segments, onClose, onRate }: Props) {
         <button type="button" className="icon-btn sv-close" onClick={onClose} aria-label="Zur Karte">
           ✕
         </button>
-        {photo && Math.abs(offAxis) > 45 && <span className="sp-gap">Blick {offAxis > 0 ? 'nach rechts' : 'nach links'} gedreht – „Vor“ geht in diese Richtung</span>}
-        {photo && message && <span className="sv-message">{message}</span>}
+        {photo && (message || Math.abs(offAxis) > 45) && (
+          <span className="sv-message">{message ?? `Blick ${offAxis > 0 ? 'nach rechts' : 'nach links'} gedreht – „Vor“ geht in diese Richtung.`}</span>
+        )}
       </div>
 
       <div className="sv-controls">

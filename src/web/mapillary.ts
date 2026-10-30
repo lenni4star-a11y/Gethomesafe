@@ -11,7 +11,7 @@ export const BUILT_IN_TOKEN = (import.meta.env.VITE_MAPILLARY_TOKEN ?? '').trim(
 export const mapillaryToken = (fromSettings: string) => fromSettings.trim() || BUILT_IN_TOKEN;
 
 export class MapillaryError extends Error {
-  constructor(readonly kind: 'token' | 'limit' | 'network') {
+  constructor(readonly kind: 'token' | 'limit' | 'network' | 'toomuch') {
     super(kind);
   }
 }
@@ -33,6 +33,8 @@ export interface Photo {
   /** zwischen 19 und 6 Uhr (Wiener Zeit) aufgenommen */
   night: boolean;
   creator: string | null;
+  /** Fotoreihe (Aufnahmefahrt), um wie bei Street View weiterzugehen */
+  sequence: string | null;
 }
 
 interface ApiImage {
@@ -44,9 +46,10 @@ interface ApiImage {
   computed_compass_angle?: number;
   compass_angle?: number;
   creator?: { username?: string };
+  sequence?: string;
 }
 
-const FIELDS = 'id,thumb_1024_url,computed_geometry,geometry,captured_at,computed_compass_angle,compass_angle,creator';
+const FIELDS = 'id,thumb_1024_url,computed_geometry,geometry,captured_at,computed_compass_angle,compass_angle,creator,sequence';
 
 function viennaHour(ms: number): number {
   return Number(new Date(ms).toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Vienna' }));
@@ -65,10 +68,35 @@ function toPhoto(img: ApiImage): Photo | null {
     compass: img.computed_compass_angle ?? img.compass_angle ?? null,
     night: h >= 19 || h < 6,
     creator: img.creator?.username ?? null,
+    sequence: img.sequence ?? null,
   };
 }
 
-async function query(bbox: number[], token: string, signal?: AbortSignal, limit = 200): Promise<Photo[]> {
+/**
+ * Fotos in einem Rechteck. Mapillary lehnt in dichten Gegenden große Rechtecke ab
+ * („Please reduce the amount of data“) – dann wird das Rechteck geviertelt und neu gefragt.
+ */
+async function query(bbox: number[], token: string, signal?: AbortSignal, limit = 100, depth = 0): Promise<Photo[]> {
+  try {
+    return await queryOnce(bbox, token, signal, limit);
+  } catch (e) {
+    if (!(e instanceof MapillaryError && e.kind === 'toomuch') || depth >= 3) throw e instanceof MapillaryError && e.kind === 'toomuch' ? new MapillaryError('network') : e;
+    const [w, s, east, n] = bbox;
+    const mx = (w + east) / 2;
+    const my = (s + n) / 2;
+    const parts = await Promise.all(
+      [
+        [w, s, mx, my],
+        [mx, s, east, my],
+        [w, my, mx, n],
+        [mx, my, east, n],
+      ].map((b) => query(b, token, signal, limit, depth + 1)),
+    );
+    return parts.flat();
+  }
+}
+
+async function queryOnce(bbox: number[], token: string, signal?: AbortSignal, limit = 100): Promise<Photo[]> {
   const url = new URL('https://graph.mapillary.com/images');
   url.searchParams.set('access_token', token);
   url.searchParams.set('fields', FIELDS);
@@ -81,7 +109,13 @@ async function query(bbox: number[], token: string, signal?: AbortSignal, limit 
     if (signal?.aborted) throw e;
     throw new MapillaryError('network');
   }
-  if (res.status === 401 || res.status === 403 || res.status === 400) throw new MapillaryError('token');
+  if (res.status === 401 || res.status === 403) throw new MapillaryError('token');
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const msg: string = body?.error?.message ?? '';
+    if (/reduce the amount of data/i.test(msg)) throw new MapillaryError('toomuch');
+    if (body?.error?.code === 190 || /access token/i.test(msg)) throw new MapillaryError('token');
+  }
   if (res.status === 429) throw new MapillaryError('limit');
   if (!res.ok) throw new MapillaryError('network');
   const data = await res.json();
@@ -89,11 +123,75 @@ async function query(bbox: number[], token: string, signal?: AbortSignal, limit 
 }
 
 /** Fotos im Umkreis eines Punkts, nächste zuerst */
-export async function photosNear(p: LngLat, token: string, meters = 60, signal?: AbortSignal): Promise<Photo[]> {
+export async function photosNear(p: LngLat, token: string, meters = 50, signal?: AbortSignal): Promise<Photo[]> {
   const dLat = meters / 110540;
   const dLon = meters / (111320 * Math.cos((p[1] * Math.PI) / 180));
-  const list = await query([p[0] - dLon, p[1] - dLat, p[0] + dLon, p[1] + dLat], token, signal, 100);
+  const list = await query([p[0] - dLon, p[1] - dLat, p[0] + dLon, p[1] + dLat], token, signal);
   return list.sort((a, b) => distance(a.coords, p) - distance(b.coords, p));
+}
+
+// ---------------------------------------------------------------- Fotoreihen (für Vor/Zurück)
+
+const sequenceCache = new Map<string, Promise<string[]>>();
+const photoCache = new Map<string, Promise<Photo | null>>();
+
+async function getJson(url: URL): Promise<unknown> {
+  const res = await fetch(url).catch(() => {
+    throw new MapillaryError('network');
+  });
+  if (res.status === 401 || res.status === 403) throw new MapillaryError('token');
+  if (res.status === 429) throw new MapillaryError('limit');
+  if (!res.ok) throw new MapillaryError('network');
+  return res.json();
+}
+
+/** Alle Foto-IDs einer Reihe in Aufnahme-Reihenfolge */
+export function sequenceIds(sequence: string, token: string): Promise<string[]> {
+  let p = sequenceCache.get(sequence);
+  if (!p) {
+    const url = new URL('https://graph.mapillary.com/image_ids');
+    url.searchParams.set('access_token', token);
+    url.searchParams.set('sequence_id', sequence);
+    p = getJson(url).then((d) => ((d as { data?: { id: string }[] }).data ?? []).map((x) => x.id));
+    p.catch(() => sequenceCache.delete(sequence));
+    sequenceCache.set(sequence, p);
+  }
+  return p;
+}
+
+export function photoById(id: string, token: string): Promise<Photo | null> {
+  let p = photoCache.get(id);
+  if (!p) {
+    const url = new URL(`https://graph.mapillary.com/${id}`);
+    url.searchParams.set('access_token', token);
+    url.searchParams.set('fields', FIELDS);
+    p = getJson(url).then((d) => toPhoto(d as ApiImage));
+    p.catch(() => photoCache.delete(id));
+    photoCache.set(id, p);
+  }
+  return p;
+}
+
+/** Nächstes Foto in der Reihe, das ungefähr in Richtung `want` liegt (oder null am Ende der Reihe) */
+export async function nextInSequence(photo: Photo, want: number, token: string): Promise<Photo | null> {
+  if (!photo.sequence) return null;
+  const ids = await sequenceIds(photo.sequence, token);
+  const i = ids.indexOf(photo.id);
+  if (i < 0) return null;
+  for (const dir of [1, -1]) {
+    // Fotos, die fast am selben Fleck liegen, überspringen
+    for (let k = 1; k <= 4; k++) {
+      const id = ids[i + dir * k];
+      if (!id) break;
+      const cand = await photoById(id, token);
+      if (!cand) continue;
+      const d = distance(photo.coords, cand.coords);
+      if (d < 2.5) continue;
+      if (Math.abs(turnAngle(want, bearing(photo.coords, cand.coords))) < 80) return cand;
+      break;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- Route als Spaziergang
@@ -112,7 +210,8 @@ export interface PhotoWalk {
 
 const STEP = 25; // alle 25 m ein Bild suchen
 const MAX_DIST = 20; // höchstens 20 m vom Weg
-const CHUNK = 350; // Abfrage in Stücken von ca. 350 m
+const CHUNK = 100; // Abfrage in Stücken von ca. 100 m (größere lehnt Mapillary in dichten Gegenden ab)
+const PARALLEL = 4; // so viele Abfragen gleichzeitig
 const GAP = 90; // ab 90 m ohne Foto gilt es als Lücke
 
 export async function loadPhotoWalk(coords: LngLat[], token: string, signal?: AbortSignal): Promise<PhotoWalk> {
@@ -125,16 +224,20 @@ export async function loadPhotoWalk(coords: LngLat[], token: string, signal?: Ab
 
   const photos = new Map<string, Photo>();
   const per = Math.round(CHUNK / STEP);
+  const boxes: number[][] = [];
   for (let i = 0; i < samples.length; i += per) {
     const part = samples.slice(i, i + per + 1);
-    const pad = 0.00025;
-    const bbox = [
+    const pad = 0.0002;
+    boxes.push([
       Math.min(...part.map((p) => p.at[0])) - pad,
       Math.min(...part.map((p) => p.at[1])) - pad,
       Math.max(...part.map((p) => p.at[0])) + pad,
       Math.max(...part.map((p) => p.at[1])) + pad,
-    ];
-    for (const p of await query(bbox, token, signal)) photos.set(p.id, p);
+    ]);
+  }
+  for (let i = 0; i < boxes.length; i += PARALLEL) {
+    const results = await Promise.all(boxes.slice(i, i + PARALLEL).map((b) => query(b, token, signal)));
+    for (const list of results) for (const p of list) photos.set(p.id, p);
   }
 
   const used = new Set<string>();

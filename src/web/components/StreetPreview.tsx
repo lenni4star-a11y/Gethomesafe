@@ -93,7 +93,7 @@ export function StreetPreview({ route, token, onClose, onMapFlight, onRate }: Pr
   if (state.kind === 'loading')
     return (
       <Modal title="Weg ansehen" onClose={onClose}>
-        <p role="status">Fotos entlang der Route werden gesucht …</p>
+        <p role="status">Fotos entlang der Route werden gesucht … (dauert bei längeren Wegen ein paar Sekunden)</p>
       </Modal>
     );
 
