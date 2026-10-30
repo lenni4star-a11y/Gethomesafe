@@ -35,3 +35,17 @@ export function openState(poi: Poi, date: Date): OpenState {
     return 'unknown';
   }
 }
+
+/** Wann schließt der Ort als Nächstes? null = unbekannt oder durchgehend */
+export function closesAt(poi: Poi, date: Date): Date | null {
+  if (!poi.oh) return null;
+  const oh = parse(poi.oh);
+  if (!oh) return null;
+  try {
+    const next = oh.getNextChange(date);
+    if (!next || next.getTime() - date.getTime() > 24 * 3600 * 1000) return null;
+    return next;
+  } catch {
+    return null;
+  }
+}

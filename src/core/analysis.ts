@@ -4,11 +4,12 @@
 import { along, bearing, distance, lineLength, turnAngle } from './geo';
 import type { Graph } from './graph';
 import { edgeSeconds, WALK_SPEED, type RawRoute, type RouteMode, type RouteStep } from './routing';
-import { edgeRisk, openPoisNear, scoreFromRisk, type SafetyContext } from './safety';
-import { Flag, WayKind, type Edge, type LitState, type LngLat, type Poi } from './types';
+import { edgeClass, edgeRisk, openPoisNear, scoreFromRisk, type SafetyClass, type SafetyContext } from './safety';
+import { Flag, WayKind, type Edge, type LngLat, type Poi } from './types';
 
-export interface LitSegment {
-  lit: LitState;
+/** Abschnitt mit gleicher Farbstufe (grün/gelb/rot) */
+export interface ColorSegment {
+  cls: SafetyClass;
   coords: LngLat[];
 }
 
@@ -39,7 +40,9 @@ export interface RouteSummary {
   score: number;
   reasons: string[];
   lit: { yes: number; no: number; unknown: number };
-  segments: LitSegment[];
+  /** Anteile der Farbstufen (nach Länge) */
+  classes: Record<SafetyClass, number>;
+  segments: ColorSegment[];
   openPlaces: Poi[];
   instructions: Instruction[];
   hints: Hint[];
@@ -54,7 +57,8 @@ export function stepCoords(s: RouteStep): LngLat[] {
 
 export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): RouteSummary {
   const coords: LngLat[] = [route.from];
-  const segments: LitSegment[] = [];
+  const segments: ColorSegment[] = [];
+  const classLen: Record<SafetyClass, number> = { good: 0, medium: 0, bad: 0 };
   const hints: Hint[] = [];
   const open = new Map<string, Poi>();
   let length = distance(route.from, route.steps.length ? stepCoords(route.steps[0])[0] : route.to);
@@ -99,9 +103,11 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
     if (e.flags & Flag.Tunnel) tunnels++;
     for (const p of openPoisNear(e, graph.pois, ctx)) open.set(p.id, p);
 
+    const cls = edgeClass(e, ctx);
+    classLen[cls] += e.length;
     const last = segments[segments.length - 1];
-    if (last && last.lit === e.lit) last.coords.push(...c.slice(1));
-    else segments.push({ lit: e.lit, coords: [...c] });
+    if (last && last.cls === cls) last.coords.push(...c.slice(1));
+    else segments.push({ cls, coords: [...c] });
 
     const kind: HintKind | null =
       e.flags & Flag.Tunnel
@@ -164,6 +170,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
     score,
     reasons,
     lit,
+    classes: { good: classLen.good / netLen, medium: classLen.medium / netLen, bad: classLen.bad / netLen },
     segments,
     openPlaces: openList,
     instructions: buildInstructions(route, hints, approach),

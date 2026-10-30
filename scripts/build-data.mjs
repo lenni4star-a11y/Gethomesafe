@@ -150,6 +150,9 @@ function simplify(points, tolMeters) {
 
 const r5 = (v) => Math.round(v * 1e5);
 
+/** Bis zu dieser Entfernung (Meter) gilt ein Ort als „am Weg“ */
+const POI_RADIUS = 50;
+
 // ---------------------------------------------------------------- Regeln für Wege
 
 // Kategorien (müssen zu src/core/types.ts passen)
@@ -165,7 +168,7 @@ const HIGHWAY_KIND = {
   steps: 'steps',
 };
 // Flags (Bits)
-const F = { PARK: 1, TUNNEL: 2, BRIDGE: 4, CROSSING: 8, PASSAGE: 16, NO_SIDEWALK: 32 };
+const F = { PARK: 1, TUNNEL: 2, BRIDGE: 4, CROSSING: 8, PASSAGE: 16, NO_SIDEWALK: 32, PARK_NEAR: 64 };
 
 function walkable(t) {
   const kind = HIGHWAY_KIND[t.highway];
@@ -189,10 +192,10 @@ function poiCategory(t) {
   if (t.amenity === 'police') return 'police';
   if (t.amenity === 'hospital' && t.emergency === 'yes') return 'hospital';
   if (t.amenity === 'fuel') return 'fuel';
-  if (['convenience', 'kiosk', 'supermarket'].includes(t.shop)) return 'shop';
+  if (['convenience', 'kiosk', 'supermarket', 'alcohol', 'beverages', 'bakery'].includes(t.shop)) return 'shop';
   if (['bar', 'pub', 'nightclub', 'biergarten'].includes(t.amenity)) return 'bar';
   if (['restaurant', 'cafe', 'fast_food', 'ice_cream'].includes(t.amenity)) return 'food';
-  if (['cinema', 'theatre', 'arts_centre'].includes(t.amenity)) return 'culture';
+  if (['cinema', 'theatre', 'arts_centre', 'casino', 'events_venue'].includes(t.amenity)) return 'culture';
   if (t.amenity === 'pharmacy') return 'pharmacy';
   if (['hotel', 'hostel'].includes(t.tourism)) return 'hotel';
   return null;
@@ -280,6 +283,15 @@ async function main() {
   });
   log('Haltestellen:', stops.length);
 
+  // Ungefähre Betriebszeiten der Wiener Linien (vereinfacht, ohne Feiertage):
+  // U-Bahn bis ca. 0:30, in Nächten vor Samstag, Sonntag durchgehend; Nachtlinien ca. 0:30–5:00.
+  const STOP_HOURS = {
+    ubahn: 'Mo-Fr 05:00-24:00; Sa,Su 00:00-24:00; Mo-Fr 00:00-00:30',
+    sbahn: 'Mo-Su 04:30-24:00; Mo-Su 00:00-00:30',
+    tram: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+    bus: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+  };
+
   // 4. OpenStreetMap in drei Durchläufen
   const pbf = await download(PBF_URL, 'Wien.osm.pbf');
 
@@ -338,7 +350,11 @@ async function main() {
     const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
     if (inArea(lon, lat)) pois.push({ id: 'w' + w.id, cat: w.cat, t: w.t, lon, lat });
   }
-  log('  Orte (Lokale, Polizei, …):', pois.length);
+  for (const s of stops) {
+    const oh = STOP_HOURS[s.type] + (s.lines.some((l) => /^N\d/.test(l)) ? '; Mo-Su 00:00-05:00' : '');
+    pois.push({ id: s.id, cat: 'transit', t: { name: s.name, opening_hours: oh, kind: s.type }, lon: s.lon, lat: s.lat });
+  }
+  log('  Orte (Lokale, Polizei, Stationen …):', pois.length);
 
   // 5. Grünflächen-Polygone bauen (offene Teile von Relationen zusammensetzen)
   const greenPolys = [];
@@ -440,11 +456,18 @@ async function main() {
 
       let f2 = flags;
       if (KIND[r.kind] >= KIND.pedestrian && inGreen(mid)) f2 |= F.PARK;
+      else {
+        // Weg direkt an einem Park (bis ca. 15 m daneben)
+        const ox = 15 / MX;
+        const oy = 15 / MY;
+        if ([mid, samples[0], samples.at(-1)].some((s) => [[ox, 0], [-ox, 0], [0, oy], [0, -oy]].some(([dx, dy]) => inGreen([s[0] + dx, s[1] + dy]))))
+          f2 |= F.PARK_NEAR;
+      }
 
       const near = new Set();
       for (let k = 0; k < samples.length; k += 3)
         for (const pi of poiGrid.near(samples[k][0], samples[k][1]))
-          if (dist([pois[pi].lon, pois[pi].lat], samples[k]) <= 40) near.add(pi);
+          if (dist([pois[pi].lon, pois[pi].lat], samples[k]) <= POI_RADIUS) near.add(pi);
 
       const file = files.get(bez.nr);
       const nodeIdx = (osmId, c) => {
@@ -491,6 +514,7 @@ async function main() {
         cat: p.cat,
         name: p.t.name ?? null,
         oh: p.t.opening_hours ?? null,
+        kind: p.t.kind ?? p.t.shop ?? p.t.amenity ?? p.t.tourism ?? null,
         lon: +p.lon.toFixed(5),
         lat: +p.lat.toFixed(5),
       };

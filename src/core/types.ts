@@ -22,11 +22,13 @@ export const Flag = {
   Crossing: 8,
   Passage: 16,
   NoSidewalk: 32,
+  /** Weg direkt neben einem Park */
+  ParkNear: 64,
 } as const;
 
 export type LitState = 'yes' | 'no' | 'unknown';
 
-export type PoiCategory = 'police' | 'hospital' | 'fuel' | 'shop' | 'bar' | 'food' | 'culture' | 'pharmacy' | 'hotel';
+export type PoiCategory = 'police' | 'hospital' | 'fuel' | 'shop' | 'bar' | 'food' | 'culture' | 'pharmacy' | 'hotel' | 'transit';
 
 export interface Poi {
   id: string;
@@ -34,6 +36,8 @@ export interface Poi {
   name: string | null;
   /** OSM opening_hours, null = unbekannt */
   oh: string | null;
+  /** genauere Art laut OSM (z. B. convenience, bar) bzw. Verkehrsmittel bei Stationen */
+  kind?: string | null;
   lon: number;
   lat: number;
 }

@@ -1,7 +1,9 @@
 import type { Hint, RouteSummary } from '../../core/analysis';
-import type { LngLat } from '../../core/types';
+import { closesAt } from '../../core/openingHours';
+import type { LngLat, Poi } from '../../core/types';
 import { formatDistance, formatDuration } from '../format';
-import { LIT_COLORS, placeLabel } from './MapView';
+import { PLACE_META, PLACE_ORDER, placeKindLabel, placeName } from '../places';
+import { CLASS_COLORS } from './MapView';
 
 const HINT_ICON: Record<Hint['kind'], string> = {
   dark: '●',
@@ -12,19 +14,25 @@ const HINT_ICON: Record<Hint['kind'], string> = {
   track: '∿',
 };
 
-/** Straßenfotos von Mapillary (frei, ohne Account ansehbar) */
+/** Straßenfotos von Mapillary auf der Webseite (ohne Schlüssel ansehbar) */
 export const mapillaryUrl = ([lon, lat]: LngLat) => `https://www.mapillary.com/app/?lat=${lat}&lng=${lon}&z=18&focus=photo`;
 
 interface Props {
   route: RouteSummary;
+  date: Date;
   onFocus: (p: LngLat) => void;
 }
 
-export function RouteDetails({ route, onFocus }: Props) {
+export function RouteDetails({ route, date, onFocus }: Props) {
   const sensitive = route.hints.filter((h) => h.kind !== 'steps');
   return (
     <div className="details">
-      <LitBar route={route} />
+      <ClassBar route={route} />
+      {route.dark && (
+        <p className="fineprint">
+          Beleuchtung: {Math.round(route.lit.yes * 100)} % beleuchtet, {Math.round(route.lit.unknown * 100)} % unbekannt, {Math.round(route.lit.no * 100)} % unbeleuchtet.
+        </p>
+      )}
 
       {sensitive.length > 0 && (
         <section aria-labelledby="hints-h">
@@ -50,9 +58,10 @@ export function RouteDetails({ route, onFocus }: Props) {
               </li>
             ))}
           </ul>
-          <p className="fineprint">„Fotos“ öffnet Straßenbilder von Mapillary (von Freiwilligen aufgenommen, nicht überall vorhanden, oft bei Tag).</p>
         </section>
       )}
+
+      <OpenPlaces places={route.openPlaces} date={date} onFocus={onFocus} />
 
       <section aria-labelledby="steps-h">
         <h3 id="steps-h">Schritt für Schritt</h3>
@@ -72,50 +81,74 @@ export function RouteDetails({ route, onFocus }: Props) {
         </ol>
       </section>
 
-      {route.openPlaces.length > 0 && (
-        <section aria-labelledby="places-h">
-          <h3 id="places-h">Gerade geöffnet am Weg</h3>
-          <ul className="places">
-            {route.openPlaces.slice(0, 12).map((p) => (
-              <li key={p.id}>
-                <button type="button" className="link-btn" onClick={() => onFocus([p.lon, p.lat])}>
-                  {p.name ?? placeLabel(p.cat)}
-                </button>
-                <span className="muted"> · {placeLabel(p.cat)}</span>
-              </li>
-            ))}
-            {route.openPlaces.length > 12 && <li className="muted">und {route.openPlaces.length - 12} weitere</li>}
-          </ul>
-          <p className="fineprint">Laut Öffnungszeiten in OpenStreetMap. Orte ohne Angaben zählen wir nicht mit.</p>
-        </section>
-      )}
-
-      <p className="fineprint">
-        Dauer: ca. {formatDuration(route.seconds)} bei gemütlichem Gehtempo.
-      </p>
+      <p className="fineprint">Dauer: ca. {formatDuration(route.seconds)} bei gemütlichem Gehtempo.</p>
     </div>
   );
 }
 
-export function LitBar({ route }: { route: RouteSummary }) {
+function OpenPlaces({ places, date, onFocus }: { places: Poi[]; date: Date; onFocus: (p: LngLat) => void }) {
+  const when = date.toLocaleString('de-AT', { weekday: 'long', hour: '2-digit', minute: '2-digit' });
+  if (!places.length)
+    return (
+      <section aria-labelledby="places-h">
+        <h3 id="places-h">Geöffnet am Weg</h3>
+        <p className="muted">Zur gewählten Zeit ({when}) ist uns kein geöffneter Ort direkt am Weg bekannt.</p>
+      </section>
+    );
+  const groups = PLACE_ORDER.map((cat) => ({ cat, list: places.filter((p) => p.cat === cat) })).filter((g) => g.list.length);
+  return (
+    <section aria-labelledby="places-h">
+      <h3 id="places-h">
+        Geöffnet am Weg <span className="muted">({places.length}, {when})</span>
+      </h3>
+      {groups.map((g) => (
+        <details key={g.cat} className="place-group" open={g.cat === 'police' || g.list.length <= 4}>
+          <summary>
+            <span aria-hidden>{PLACE_META[g.cat].icon}</span> {PLACE_META[g.cat].label} ({g.list.length})
+          </summary>
+          <ul className="places">
+            {g.list.map((p) => {
+              const until = closesAt(p, date);
+              return (
+                <li key={p.id}>
+                  <button type="button" className="link-btn" onClick={() => onFocus([p.lon, p.lat])}>
+                    {placeName(p)}
+                  </button>
+                  <span className="muted">
+                    {' '}
+                    · {placeKindLabel(p)}
+                    {until ? ` · bis ${until.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ))}
+      <p className="fineprint">
+        Laut Öffnungszeiten in OpenStreetMap, Öffi-Stationen laut ungefähren Betriebszeiten der Wiener Linien. Orte ohne Öffnungszeiten zählen wir nicht mit.
+      </p>
+    </section>
+  );
+}
+
+export function ClassBar({ route }: { route: RouteSummary }) {
   const parts = [
-    { key: 'yes', label: 'beleuchtet', v: route.lit.yes },
-    { key: 'unknown', label: 'unbekannt', v: route.lit.unknown },
-    { key: 'no', label: 'unbeleuchtet', v: route.lit.no },
+    { key: 'good', label: 'grün', v: route.classes.good },
+    { key: 'medium', label: 'gelb', v: route.classes.medium },
+    { key: 'bad', label: 'rot', v: route.classes.bad },
   ] as const;
   return (
     <div className="litbar-wrap">
       <div className="litbar" role="img" aria-label={parts.map((p) => `${Math.round(p.v * 100)} % ${p.label}`).join(', ')}>
         {parts.map((p) =>
-          p.v > 0 ? (
-            <span key={p.key} className={`lit-${p.key}`} style={{ width: `${p.v * 100}%`, background: LIT_COLORS[p.key] }} />
-          ) : null,
+          p.v > 0 ? <span key={p.key} className={`seg-${p.key}`} style={{ width: `${p.v * 100}%`, background: CLASS_COLORS[p.key] }} /> : null,
         )}
       </div>
       <div className="legend" aria-hidden>
         {parts.map((p) => (
           <span key={p.key}>
-            <i className={`dot lit-${p.key}`} style={{ background: LIT_COLORS[p.key] }} /> {p.label} {Math.round(p.v * 100)} %
+            <i className="dot" style={{ background: CLASS_COLORS[p.key] }} /> {p.label} {Math.round(p.v * 100)} %
           </span>
         ))}
       </div>

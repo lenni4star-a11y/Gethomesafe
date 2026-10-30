@@ -6,7 +6,7 @@ import { summarize, type RouteSummary } from './analysis';
 import { bboxAround, bboxIntersects, pointInRing } from './geo';
 import { Graph } from './graph';
 import { findRoute } from './routing';
-import { createContext } from './safety';
+import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
 import type { DataIndex, DistrictFile, DistrictInfo, LngLat } from './types';
 
@@ -54,9 +54,9 @@ export class Planner {
     return p;
   }
 
-  async plan(from: LngLat, to: LngLat, date: Date): Promise<PlanResult | null> {
+  async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions = {}): Promise<PlanResult | null> {
     await this.ensureDistricts([from, to]);
-    const ctx = createContext(date, isDark(date, from[1], from[0]));
+    const ctx = createContext(date, isDark(date, from[1], from[0]), opts);
     const fast = findRoute(this.graph, from, to, 'fastest', ctx);
     const safe = findRoute(this.graph, from, to, 'safest', ctx);
     if (!fast || !safe) return null;

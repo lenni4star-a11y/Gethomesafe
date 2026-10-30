@@ -1,29 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanResult, Planner } from '../core/planner';
 import type { RouteMode } from '../core/routing';
+import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings';
 import { isDark } from '../core/sun';
 import type { LngLat } from '../core/types';
+import { Legend } from './components/Legend';
 import { MapView, type MapHandle } from './components/MapView';
 import { PlaceInput } from './components/PlaceInput';
 import { RouteDetails } from './components/RouteDetails';
+import { SettingsPanel } from './components/SettingsPanel';
+import { StreetPreview } from './components/StreetPreview';
+import { TimePicker } from './components/TimePicker';
 import { getPlanner } from './data';
-import { formatDistance, formatDuration, formatTime, toLocalInput } from './format';
+import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
+import { useStored } from './storage';
 
 type Pick = 'start' | 'end' | null;
 
 export function App() {
   const [planner, setPlanner] = useState<Planner | null>(null);
+  const [settings, setSettings] = useStored<Settings>('settings', DEFAULT_SETTINGS, withDefaults);
   const [start, setStart] = useState<Place | null>(null);
   const [end, setEnd] = useState<Place | null>(null);
   const [customTime, setCustomTime] = useState<Date | null>(null);
   const [plan, setPlan] = useState<PlanResult | null>(null);
+  const [planTime, setPlanTime] = useState<Date>(new Date());
   const [selected, setSelected] = useState<RouteMode>('safest');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
   const [flying, setFlying] = useState(false);
+  const [photos, setPhotos] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [showTime, setShowTime] = useState(false);
   const map = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -61,25 +72,27 @@ export function App() {
       return;
     }
     let cancelled = false;
+    const when = customTime ?? new Date();
     setBusy(true);
     setMessage(null);
     planner
-      .plan(start.coords, end.coords, customTime ?? new Date())
+      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance })
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
         setPlan(res);
+        setPlanTime(when);
       })
       .catch(() => !cancelled && setMessage('Beim Berechnen ist etwas schiefgegangen. Bitte versuch es noch einmal.'))
       .finally(() => !cancelled && setBusy(false));
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime]);
+  }, [planner, start, end, customTime, settings.parkAvoidance]);
 
   useEffect(() => {
-    map.current?.showPlan(plan, selected);
-  }, [plan, selected]);
+    map.current?.showPlan(plan, selected, planTime);
+  }, [plan, selected, planTime]);
 
   const locate = useCallback(() => {
     if (!window.isSecureContext || !navigator.geolocation) {
@@ -118,6 +131,7 @@ export function App() {
 
   const fly = () => {
     if (!chosen) return;
+    setPhotos(false);
     setFlying(true);
     setExpanded(false);
     map.current?.flyAlong(chosen, () => setFlying(false));
@@ -131,6 +145,11 @@ export function App() {
         <span className="brand">Gethomesafe</span>
         <span className="badge">Prototyp</span>
       </header>
+      <button type="button" className="settings-btn" onClick={() => setShowSettings(true)} aria-label="Einstellungen">
+        ⚙
+      </button>
+
+      {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
 
       {pick && (
         <div className="pick-banner" role="status">
@@ -142,9 +161,14 @@ export function App() {
       )}
 
       {flying && (
-        <button type="button" className="stop-fly" onClick={() => (map.current?.stopFly(), setFlying(false))}>
-          Vorschau beenden
-        </button>
+        <>
+          <div className="fly-label" role="status">
+            Kartenfahrt (keine Fotos)
+          </div>
+          <button type="button" className="stop-fly" onClick={() => (map.current?.stopFly(), setFlying(false))}>
+            Vorschau beenden
+          </button>
+        </>
       )}
 
       {!flying && (
@@ -160,21 +184,11 @@ export function App() {
 
           <div className="time-row">
             <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? '☾ dunkel' : '☀ hell'}</span>
-            <span>{customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'}</span>
-            <label className="time-edit">
-              <span className="sr-only">Uhrzeit ändern</span>
-              <input
-                type="datetime-local"
-                value={toLocalInput(time)}
-                onChange={(e) => setCustomTime(e.target.value ? new Date(e.target.value) : null)}
-              />
-            </label>
-            {customTime && (
-              <button type="button" className="link-btn" onClick={() => setCustomTime(null)}>
-                Jetzt
-              </button>
-            )}
+            <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
+              {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾
+            </button>
           </div>
+          {showTime && <TimePicker value={customTime} onChange={setCustomTime} />}
 
           {message && (
             <p className="message" role="status">
@@ -219,8 +233,8 @@ export function App() {
                 <>
                   <p className="reasons">{chosen.reasons.join(' · ')}</p>
                   <div className="actions">
-                    <button type="button" className="btn primary" onClick={fly}>
-                      Vorschau abfliegen
+                    <button type="button" className="btn primary" onClick={() => (setPhotos(true), setExpanded(false))}>
+                      Vorschau
                     </button>
                     <button type="button" className="btn" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
                       {expanded ? 'Weniger' : 'Details'}
@@ -229,6 +243,7 @@ export function App() {
                   {expanded && (
                     <RouteDetails
                       route={chosen}
+                      date={planTime}
                       onFocus={(p) => {
                         setExpanded(false);
                         map.current?.focus(p);
@@ -246,9 +261,21 @@ export function App() {
             </p>
           )}
 
-          <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei) oder 112.</p>
+          <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei), 144 (Rettung) oder 112.</p>
         </section>
       )}
+
+      {photos && chosen && (
+        <StreetPreview
+          route={chosen}
+          token={settings.mapillaryToken}
+          onClose={() => setPhotos(false)}
+          onMapFlight={fly}
+          onOpenSettings={() => (setPhotos(false), setShowSettings(true))}
+        />
+      )}
+
+      {showSettings && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
