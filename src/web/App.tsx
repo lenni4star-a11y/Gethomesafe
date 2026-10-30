@@ -4,7 +4,13 @@ import type { RouteMode } from '../core/routing';
 import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings';
 import { isDark } from '../core/sun';
 import type { LngLat } from '../core/types';
+import type { Contact } from '../core/contacts';
+import { CallScreen } from './components/CallScreen';
+import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
+import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
+import { EscortView } from './components/EscortView';
 import { Legend } from './components/Legend';
+import { Modal } from './components/Modal';
 import { MapView, type MapHandle } from './components/MapView';
 import { PlaceInput } from './components/PlaceInput';
 import { RouteDetails } from './components/RouteDetails';
@@ -15,6 +21,7 @@ import { getPlanner } from './data';
 import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
 import { useStored } from './storage';
+import { useEscort } from './useEscort';
 
 type Pick = 'start' | 'end' | null;
 
@@ -35,6 +42,12 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showTime, setShowTime] = useState(false);
+  const [contacts, setContacts] = useStored<Contact[]>('contacts', []);
+  const [showSos, setShowSos] = useState(false);
+  const [fakeCall, setFakeCall] = useState(false);
+  const [showEscortSetup, setShowEscortSetup] = useState(false);
+  const [arrived, setArrived] = useState<string[] | null>(null);
+  const escort = useEscort();
   const map = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -171,7 +184,25 @@ export function App() {
         </>
       )}
 
-      {!flying && (
+      {escort.session && !flying && (
+        <EscortView
+          session={escort.session}
+          now={escort.now}
+          lastPos={escort.lastPos}
+          geoError={escort.geoError}
+          contacts={contacts}
+          dispatch={escort.dispatch}
+          checkPin={escort.checkPin}
+          onTalkCall={() => setFakeCall(true)}
+          onEnd={async (didArrive) => {
+            const ids = escort.session?.contactIds ?? [];
+            await escort.end();
+            if (didArrive) setArrived(ids);
+          }}
+        />
+      )}
+
+      {!flying && !escort.session && (
         <section className={`sheet ${expanded ? 'expanded' : ''}`} aria-label="Heimweg planen">
           <button type="button" className="grabber" onClick={() => setExpanded((e) => !e)} aria-label={expanded ? 'Bereich verkleinern' : 'Bereich vergrößern'}>
             <span />
@@ -261,6 +292,10 @@ export function App() {
             </p>
           )}
 
+          <button type="button" className="btn escort-start" onClick={() => setShowEscortSetup(true)}>
+            🫂 Begleitung starten
+          </button>
+
           <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei), 144 (Rettung) oder 112.</p>
         </section>
       )}
@@ -275,7 +310,66 @@ export function App() {
         />
       )}
 
-      {showSettings && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)}>
+          <section className="settings-section">
+            <h3>Begleitmodus</h3>
+            <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
+          </section>
+        </SettingsPanel>
+      )}
+
+      {!fakeCall && (
+        <button type="button" className="sos-btn" onClick={() => setShowSos(true)} aria-label="Hilfe und Notruf">
+          SOS
+        </button>
+      )}
+
+      {showSos && (
+        <EmergencyMenu
+          contacts={contacts}
+          onContactsChange={setContacts}
+          onClose={() => setShowSos(false)}
+          onFakeCall={() => (setShowSos(false), setFakeCall(true))}
+          lastPosition={escort.lastPos}
+        />
+      )}
+
+      {showEscortSetup && (
+        <EscortSetup
+          destination={end?.label ?? ''}
+          contacts={contacts}
+          onContactsChange={setContacts}
+          settings={settings.escort}
+          onSettingsChange={(e) => setSettings({ ...settings, escort: e })}
+          onClose={() => setShowEscortSetup(false)}
+          onStart={(pin, dest, ids) => {
+            setShowEscortSetup(false);
+            escort.start(settings.escort, pin, dest, ids);
+          }}
+        />
+      )}
+
+      {arrived && (
+        <Modal title="Schön, dass du da bist" onClose={() => setArrived(null)}>
+          <p>Die Begleitung ist beendet, dein Standort wurde gelöscht.</p>
+          {contacts.filter((c) => arrived.includes(c.id)).length > 0 && (
+            <>
+              <p>Möchtest du Bescheid geben, dass du angekommen bist?</p>
+              {contacts
+                .filter((c) => arrived.includes(c.id))
+                .map((c) => (
+                  <ContactActions key={c.id} contact={c} kind="arrived" />
+                ))}
+            </>
+          )}
+          <button type="button" className="btn" onClick={() => setArrived(null)}>
+            Schließen
+          </button>
+        </Modal>
+      )}
+
+      {fakeCall && <CallScreen kind="fake" caller="Sam" onHangup={() => setFakeCall(false)} />}
     </div>
   );
 }
