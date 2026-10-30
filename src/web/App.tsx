@@ -9,6 +9,7 @@ import { distance } from '../core/geo';
 import { edgeKey, matchesTime, newRating, SCORE_LABELS, timeFilterFor, WEEKDAY_SHORT, type Rating, type RatingTarget } from '../core/ratings';
 import { RatingForm } from './components/RatingForm';
 import { RatingsPanel, type RatingsView } from './components/RatingsPanel';
+import { AlarmScreen } from './components/AlarmScreen';
 import { CallScreen } from './components/CallScreen';
 import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
@@ -51,6 +52,7 @@ export function App() {
   const [showSos, setShowSos] = useState(false);
   const [fakeCall, setFakeCall] = useState(false);
   const [fakeAt, setFakeAt] = useState<number | null>(null);
+  const [alarm, setAlarm] = useState(false);
   const [showEscortSetup, setShowEscortSetup] = useState(false);
   const [arrived, setArrived] = useState<string[] | null>(null);
   const escort = useEscort();
@@ -400,8 +402,15 @@ export function App() {
             else setFakeAt(Date.now() + delay * 1000);
           }}
           lastPosition={escort.lastPos}
+          onAlarm={() => {
+            unlockAudio();
+            setShowSos(false);
+            setAlarm(true);
+          }}
         />
       )}
+
+      {alarm && <AlarmScreen onStop={() => setAlarm(false)} />}
 
       {showEscortSetup && (
         <EscortSetup

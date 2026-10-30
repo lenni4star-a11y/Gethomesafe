@@ -1726,3 +1726,143 @@ a.btn {
 .modal-card {
   overflow-x: hidden;
 }
+
+/* ---------- Runde 3, Block B: SOS-Menü und Alarm */
+
+.sos-btn {
+  z-index: 25; /* über allen Dialogen; nur Anruf, PIN und Alarm liegen darüber */
+}
+
+.modal-card {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 92px);
+}
+
+.sos-modal .modal-card {
+  padding-bottom: 0;
+}
+
+.sos-section {
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sos-section h3 {
+  margin: 4px 0 10px;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sos-emergency {
+  border-top: none;
+}
+
+.sos-emergency h3 {
+  color: #ff8a9b;
+}
+
+.sos-emergency .emergency-btn {
+  min-height: 92px;
+}
+
+.allday {
+  display: inline-block;
+  padding: 0 8px;
+  margin-right: 4px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.allday.yes {
+  background: #1c3a30;
+  color: var(--ok);
+}
+
+.allday.no {
+  background: #3b3420;
+  color: var(--warn);
+}
+
+.sos-footer {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -18px;
+  padding: 10px 96px calc(env(safe-area-inset-bottom) + 12px) 18px;
+  background: linear-gradient(180deg, rgba(31, 28, 46, 0), var(--surface) 30%);
+}
+
+.alarm-btn {
+  display: grid;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  border: 3px solid #fff;
+  background: #b5121b;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.alarm-btn small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.alarm-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  animation: alarm-flash 0.5s steps(1) infinite;
+}
+
+@keyframes alarm-flash {
+  0% {
+    background: #ff1f3d;
+  }
+  50% {
+    background: #ffffff;
+  }
+}
+
+.alarm-text {
+  font-size: clamp(3rem, 18vw, 7rem);
+  font-weight: 900;
+  color: #000;
+  mix-blend-mode: difference;
+  filter: invert(1);
+}
+
+.alarm-call {
+  width: min(320px, 100%);
+}
+
+.alarm-stop {
+  width: min(320px, 100%);
+  flex: none;
+  background: #15131f;
+  color: #fff;
+  border-color: #15131f;
+}
+
+.alarm-text {
+  color: #000;
+  mix-blend-mode: normal;
+  filter: none;
+}
+
+.alarm-call {
+  background: #000;
+  color: #fff;
+}

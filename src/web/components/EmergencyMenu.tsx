@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void;
   /** Verzögerung in Sekunden: 0, 10 oder 30 */
   onFakeCall: (delaySec: number) => void;
+  /** Sirene und blinkender Bildschirm */
+  onAlarm: () => void;
   /** Während einer Begleitung: zuletzt bekannte Position */
   lastPosition?: { coords: LngLat; time: number } | null;
 }
@@ -89,15 +91,40 @@ export function SilentCallHint() {
 }
 
 /** Notfall-Menü: Notrufe, eigene Kontakte, Hilfsstellen, stiller Notruf, Fake-Anruf */
-export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall, lastPosition }: Props) {
+export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall, onAlarm, lastPosition }: Props) {
   const [editContacts, setEditContacts] = useState(false);
   return (
     <Modal title="Hilfe & Notruf" onClose={onClose} variant="sos-modal">
-      <EmergencyButtons />
-      <p className="fineprint">Der Anruf startet direkt über dein Telefon. 112 funktioniert auch ohne SIM-PIN.</p>
+      <section className="sos-section sos-emergency" aria-labelledby="sos-notruf">
+        <h3 id="sos-notruf">Notruf</h3>
+        <EmergencyButtons />
+        <p className="fineprint">Der Anruf startet direkt über dein Telefon. 112 funktioniert auch ohne SIM-PIN.</p>
+        <SilentCallHint />
+      </section>
 
-      <section className="settings-section">
-        <h3>Meine Kontakte</h3>
+      <section className="sos-section" aria-labelledby="sos-reden">
+        <h3 id="sos-reden">Hilfe und Reden</h3>
+        <ul className="helplines">
+          {HELPLINES.map((h) => (
+            <li key={h.number}>
+              <a className="helpline-call" href={`tel:${h.dial}`}>
+                <b>{h.name}</b>
+                <span className="helpline-number">{h.number}</span>
+              </a>
+              <span className="muted">
+                <span className={`allday ${h.allDay ? 'yes' : 'no'}`}>{h.allDay ? '24 h' : 'nicht 24 h'}</span> {h.description} {h.allDay ? '' : `(${h.hours}) `}
+                <a href={h.source} target="_blank" rel="noreferrer">
+                  Quelle
+                </a>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="fineprint">Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.</p>
+      </section>
+
+      <section className="sos-section" aria-labelledby="sos-kontakte">
+        <h3 id="sos-kontakte">Meine Kontakte</h3>
         {editContacts ? (
           <>
             <ContactsEditor contacts={contacts} onChange={onContactsChange} />
@@ -114,13 +141,13 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
             <button type="button" className="link-btn" onClick={() => setEditContacts(true)}>
               {contacts.length ? 'Kontakte bearbeiten' : '+ Kontakt anlegen'}
             </button>
-            <p className="fineprint">SMS und WhatsApp öffnen eine fertige Nachricht mit deinem aktuellen Standort. Du schickst sie selbst ab.</p>
+            <p className="fineprint">SMS und WhatsApp öffnen eine fertige Nachricht mit deinem aktuellen Standort (nie deiner Heimadresse). Du schickst sie selbst ab.</p>
           </>
         )}
       </section>
 
-      <section className="settings-section">
-        <h3>Fake-Anruf</h3>
+      <section className="sos-section" aria-labelledby="sos-fake">
+        <h3 id="sos-fake">Fake-Anruf</h3>
         <div className="tp-row">
           {[0, 10, 30].map((d) => (
             <button key={d} type="button" className="chip" onClick={() => onFakeCall(d)}>
@@ -128,33 +155,15 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
             </button>
           ))}
         </div>
-        <p className="fineprint">Dein Telefon klingelt, eine Stimme redet mit dir. Gut, um beschäftigt zu wirken oder einfach Gesellschaft zu haben.</p>
+        <p className="fineprint">Dein Telefon klingelt laut, eine Stimme redet mit dir. Gut, um beschäftigt zu wirken oder einfach Gesellschaft zu haben.</p>
       </section>
 
-      <section className="settings-section">
-        <SilentCallHint />
-      </section>
-
-      <section className="settings-section">
-        <h3>Hilfsstellen in Wien</h3>
-        <ul className="helplines">
-          {HELPLINES.map((h) => (
-            <li key={h.number}>
-              <a className="helpline-call" href={`tel:${h.dial}`}>
-                <b>{h.name}</b>
-                <span className="helpline-number">{h.number}</span>
-              </a>
-              <span className="muted">
-                {h.hours}. {h.description}{' '}
-                <a href={h.source} target="_blank" rel="noreferrer">
-                  Quelle
-                </a>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="fineprint">Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein spezielles Heimwegtelefon für Wien haben wir nicht gefunden.</p>
-      </section>
+      <div className="sos-footer">
+        <button type="button" className="alarm-btn" onClick={onAlarm}>
+          🚨 ALARM
+          <small>sehr laute Sirene + blinkender Bildschirm</small>
+        </button>
+      </div>
     </Modal>
   );
 }
