@@ -3,7 +3,7 @@
 Prototyp einer Web-App (PWA), die FLINTA* und andere marginalisierte Menschen abends und nachts sicherer nach Hause bringt.
 Pilotgebiet: Wiener Bezirke mit vielen Studierenden.
 
-**Stand: Phase 1, Karte und sichere Route**
+**Stand: Phasen 1–3 (Route, Notfall-Menü und Begleitmodus, Bewertungen).** Alle Anforderungen und Regeln stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Was die App gerade kann
 
