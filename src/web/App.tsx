@@ -38,6 +38,7 @@ import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
 import { clearAll, useStored } from './storage';
 import { useEscort } from './useEscort';
+import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
@@ -70,6 +71,7 @@ export function App() {
   const [showEscortSetup, setShowEscortSetup] = useState(false);
   const [arrived, setArrived] = useState<string[] | null>(null);
   const escort = useEscort();
+  const live = useLiveShare(escort.lastPos, escort.session !== null);
   const [ratings, setRatings] = useStored<Rating[]>('ratings', []);
   const [ratingsView, setRatingsView] = useStored<RatingsView>('ratingsView', 'time');
   const [showRatings, setShowRatings] = useState(false);
@@ -384,9 +386,11 @@ export function App() {
           compact={escortCompact}
           onToggleCompact={() => setEscortCompact((c) => !c)}
           remaining={escortRemaining}
+          live={live}
           onEnd={async (didArrive, decoy) => {
             const ids = escort.session?.contactIds ?? [];
             const position = escort.lastPos;
+            await live.stop();
             await escort.end();
             // Täuschungs-PIN: sieht genauso aus wie ein normales Ende
             if (decoy) void triggerSilentAlarm({ contacts: contacts.filter((c) => ids.includes(c.id)), position });

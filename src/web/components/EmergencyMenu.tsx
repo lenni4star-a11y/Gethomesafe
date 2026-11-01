@@ -29,13 +29,13 @@ export function currentPosition(): Promise<{ coords: LngLat; time: number } | nu
   });
 }
 
-export function ContactActions({ contact, kind, lastPosition }: { contact: Contact; kind: MessageKind; lastPosition?: { coords: LngLat; time: number } | null }) {
+export function ContactActions({ contact, kind, lastPosition, liveLink }: { contact: Contact; kind: MessageKind; lastPosition?: { coords: LngLat; time: number } | null; liveLink?: string | null }) {
   const [busy, setBusy] = useState(false);
   const send = async (via: 'sms' | 'whatsapp') => {
     setBusy(true);
     const pos = kind === 'arrived' ? null : (lastPosition ?? (await currentPosition()));
     setBusy(false);
-    const body = buildMessage(kind, pos);
+    const body = buildMessage(kind, pos) + (liveLink && kind !== 'arrived' ? ` Live-Standort: ${liveLink}` : '');
     window.location.href = via === 'sms' ? smsLink(contact.phone, body) : whatsappLink(contact.phone, body);
   };
   return (

@@ -30,6 +30,9 @@ jobs:
         env:
           # Mapillary Client Token aus den Repository-Secrets (Settings → Secrets and variables → Actions)
           VITE_MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+          # Supabase (Frankfurt) für den Live-Standort-Link: Projekt-Adresse und öffentlicher Schlüssel
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

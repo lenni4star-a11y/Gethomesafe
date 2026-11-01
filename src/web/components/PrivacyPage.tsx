@@ -32,6 +32,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
           <li>Wenn du auf ◎ tippst (Start = mein Standort) – einmalig, nicht gespeichert.</li>
           <li>Während einer Begleitung – nur die letzte Position wird gespeichert und beim Ende gelöscht.</li>
           <li>Wenn du im SOS-Menü eine Nachricht vorbereitest – einmalig für diese Nachricht.</li>
+          <li>Wenn du in der Begleitung einen <b>Live-Standort-Link</b> erstellst – nur bis zum Ende der Begleitung (siehe unten).</li>
         </ul>
 
         <h3>Welche Dienste die App aufruft</h3>
@@ -49,6 +50,11 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
             <b>Mapillary</b> (gehört zu Meta): Straßenfotos. Übertragen wird der Bereich rund um die Route bzw. die Stelle, die du ansiehst.
           </li>
           <li>
+            <b>Supabase</b> (Server in Frankfurt, EU) – nur wenn du einen Live-Standort-Link erstellst: Dein Standort wird schon auf deinem Handy verschlüsselt.
+            Der Schlüssel steht nur im Link und kommt nie beim Server an – Supabase sieht nur unlesbaren Text. Beim Beenden der Begleitung wird der Eintrag
+            gelöscht, spätestens 60 Minuten nach der letzten Aktualisierung verfällt er von selbst. Kein Ziel, kein Zuhause, keine Route, kein Name.
+          </li>
+          <li>
             <b>Spracherkennung</b> (nur wenn du im Anruf mit „gut“ / „nicht gut“ antwortest): In Chrome wird die Aufnahme dafür an Google geschickt. Die Knöpfe
             funktionieren ohne.
           </li>
@@ -59,6 +65,10 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
         <p>
           Nur wenn du es auslöst: eine vorbereitete SMS oder WhatsApp mit deinem <b>aktuellen Standort</b> (Link zur Karte). Nie deine Heimadresse. Absenden musst
           du selbst – die App verschickt nichts heimlich. Bei WhatsApp gelten die Regeln von WhatsApp.
+        </p>
+        <p>
+          <b>Live-Standort-Link:</b> Wer den Link hat, sieht deinen aktuellen Standort, solange die Begleitung läuft – sonst nichts. Schick ihn nur an Menschen,
+          denen du vertraust. Mit „Teilen beenden“ oder dem Ende der Begleitung ist er sofort ungültig.
         </p>
 
         <h3>Wie du alles löschst</h3>

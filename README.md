@@ -13,6 +13,8 @@ Pilotgebiet: Wiener Bezirke mit vielen Studierenden.
 - Losgeh-Zeit änderbar (zum Testen: einfach 23:30 Uhr einstellen)
 - Details: Hinweise wie „260 m unbeleuchteter Abschnitt“ mit „Zeigen“ und „Fotos“ (Mapillary), Schritt-für-Schritt-Beschreibung, gerade geöffnete Orte am Weg
 - „Vorschau abfliegen“: Die Kamera fährt den Weg einmal ab
+- **Mit Öffis:** dritte Route (zu Fuß → Öffi → zu Fuß) nach dem Fahrplan der Wiener Linien, auch Nachtbusse; bei langen Strecken vorausgewählt
+- **Live-Standort-Link** in der Begleitung: Kontakte sehen deinen aktuellen Standort, bis die Begleitung endet (Ende-zu-Ende verschlüsselt, Server: Supabase Frankfurt)
 
 ## So wird die „sicherste“ Route berechnet
 
@@ -92,6 +94,10 @@ Einmalige Einrichtung (Repo muss öffentlich sein, sonst braucht GitHub Pages ei
 1. Kostenlosen „Client Token“ erstellen: https://www.mapillary.com/dashboard/developers
 2. **Lokal:** `.env.example` zu `.env` kopieren und den Token bei `VITE_MAPILLARY_TOKEN=` eintragen. `.env` wird nie hochgeladen.
 3. **Online (für alle Nutzer·innen):** GitHub → Repo → Settings → Secrets and variables → Actions → „New repository secret“, Name `MAPILLARY_TOKEN`, Wert = Token. Danach unter Actions „App veröffentlichen“ neu starten.
+
+## Live-Standort-Link (Supabase) einrichten
+
+Schritt-für-Schritt-Anleitung: [`supabase/ANLEITUNG.md`](supabase/ANLEITUNG.md). Kurz: Supabase-Projekt in Frankfurt anlegen, `supabase/live.sql` im SQL Editor ausführen, GitHub-Secrets `SUPABASE_URL` und `SUPABASE_ANON_KEY` (Publishable-/anon-Schlüssel, nie den Secret-Schlüssel) eintragen und „App veröffentlichen“ neu starten. Ohne die Secrets zeigt die App „noch nicht eingerichtet“.
 
 ## Kartendaten aktualisieren
 

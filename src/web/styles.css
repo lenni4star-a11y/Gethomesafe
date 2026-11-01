@@ -2452,3 +2452,91 @@ a.btn {
   animation: none;
   background: rgba(21, 19, 31, 0.97);
 }
+
+/* ---------- Live-Standort-Link */
+
+.live-box {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.live-box.on {
+  border-color: var(--ok);
+}
+
+.live-box h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.live-box .live-dot {
+  display: inline-block;
+  flex: none;
+}
+
+.live-viewer {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+}
+
+.live-map {
+  position: absolute;
+  inset: 0;
+}
+
+.live-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  max-width: 520px;
+  margin: 0 auto;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.live-card h1 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+}
+
+.live-card p {
+  margin: 6px 0;
+}
+
+.live-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 8px rgba(157, 134, 255, 0.3);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .live-card {
+    left: auto;
+    right: 12px;
+    top: 12px;
+    bottom: 12px;
+    width: min(360px, 45vw);
+    max-height: none;
+  }
+}
+
+.live-viewer .maplibregl-ctrl-bottom-right {
+  top: calc(env(safe-area-inset-top) + 8px);
+  bottom: auto;
+}

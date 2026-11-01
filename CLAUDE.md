@@ -15,7 +15,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - App-Sprache: Deutsch, gendergerecht, freundlich und ruhig.
 - Testen am Handy: Die App wird bei jedem Push auf `main` automatisch auf GitHub Pages veröffentlicht: https://lenni4star-a11y.github.io/Gethomesafe/ (Workflow `.github/workflows/pages.yml`). Lokal mit https: `npm run dev:https`.
 - Immer auf iPhone (Safari) und Android (Chrome), im Hoch- und Querformat und auf kleinem Bildschirm (z. B. iPhone SE) prüfen. In der Cloud-Umgebung gibt es nur einen Test-Chrome mit Handy-Größe; echte Geräte-Tests (Ton, Vibration, Lautlos-Schalter) muss die Projektinhaber·in machen – das ehrlich sagen.
-- **Geheimnisse nie ins Repo:** Mapillary-Token nur in `.env` (lokal, in `.gitignore`) bzw. als GitHub-Secret `MAPILLARY_TOKEN`. Token nicht im Chat erfragen.
+- **Geheimnisse nie ins Repo:** Mapillary-Token nur in `.env` (lokal, in `.gitignore`) bzw. als GitHub-Secret `MAPILLARY_TOKEN`; Supabase-Adresse und öffentlicher Schlüssel als Secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY` (lokal `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`). Token nicht im Chat erfragen. Den Supabase-Secret-/service_role-Schlüssel nie verwenden.
 
 ## Rahmen und Technik
 - **Prototyp als PWA** (Vite + React + TypeScript, Karte: MapLibre GL mit OpenFreeMap-Stil). Später **native App (Expo/React Native)**.
@@ -40,7 +40,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 ## Funktionen (Stand und Anforderungen)
 
 ### Route und Karte
-- Schnellste und sicherste Route, jeweils mit Dauer, Länge, **Sicherheitswert 1–10** und kurzer Begründung.
+- Schnellste und sicherste Route und ggf. „Mit Öffis“ (vorausgewählt, wenn der Fußweg ≥ 25 min und Öffis mind. ⅓ schneller sind; `recommendTransit`), jeweils mit Dauer, Länge, **Sicherheitswert 1–10** und kurzer Begründung.
 - **Farbstufen je Wegabschnitt mit Legende:** grün = beleuchtet und nicht schlecht bewertet; gelb = teilweise beleuchtet, keine Daten oder mäßig bewertet (zusätzlich gestrichelt); rot = unbeleuchtet oder schlecht bewertet. Tagsüber zählt Beleuchtung nicht.
 - **Wochentag und Uhrzeit:** Losgeh-Zeit frei wählbar (Tag + Uhrzeit + Schnellwahl wie „Sa 2:00“). Öffnungszeiten und Bewertungen werden für genau diese Zeit ausgewertet.
 - **Offene Orte am Weg** (bis 50 m): Liste in den Details (gruppiert, mit „bis wann geöffnet“) und Symbole auf der Karte.
@@ -82,7 +82,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 
 ### Einführung und Datenschutz
 - Einführung beim ersten Start (4 Schritte, überspringbar, in den Einstellungen erneut aufrufbar): was die App kann, was sie nicht kann (kein Notruf-Ersatz, gesperrter Bildschirm, iPhone ohne Vibration, Prototyp), Zuhause und Kontakte, Testton.
-- Datenschutz-Seite in einfacher Sprache (`PrivacyPage`): was wo gespeichert wird, wann der Standort genutzt wird, aufgerufene Dienste (GitHub Pages, OpenFreeMap, Photon/komoot, Mapillary/Meta, Spracherkennung in Chrome → Google), was an Kontakte geht, wie man löscht. **Bei jedem neuen Dienst aktualisieren.**
+- Datenschutz-Seite in einfacher Sprache (`PrivacyPage`): was wo gespeichert wird, wann der Standort genutzt wird, aufgerufene Dienste (GitHub Pages, OpenFreeMap, Photon/komoot, Mapillary/Meta, Supabase Frankfurt nur beim Live-Link, Spracherkennung in Chrome → Google), was an Kontakte geht, wie man löscht. **Bei jedem neuen Dienst aktualisieren.**
 - „Alle meine Daten löschen“ (IndexedDB + local/sessionStorage); nicht während einer laufenden Begleitung (sonst Beenden ohne PIN möglich).
 
 ### Begleitmodus: Abweichung, Ankunft, Täuschungs-PIN
@@ -99,7 +99,9 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 
 ## Offen / wartet auf Entscheidung
 - **Öffis im Routing – Fahrplan umgesetzt (Variante „erst Fahrplan, Live später“):** `scripts/build-transit.mjs` verarbeitet das GTFS der Wiener Linien (CC BY 4.0) zu `public/data/transit.json` (ca. 0,6 MB): Steige im Gebiet mit Beleuchtungs-Flag (Stadt-Wien-Leuchten bis 30 m), Linienverläufe mit Fahrzeiten, Abfahrten je Tagestyp (Mo–Do, Fr, Sa, So; Beispieltage ohne Feiertage), inkl. Nachtbussen und U-Bahn-Nachtbetrieb (gehört zum Samstag/Sonntag-Betriebstag). `src/core/transit.ts`: Suche zu Fuß → bis zu 2 Fahrten (1 Umstieg) → zu Fuß (RAPTOR-ähnlich), nachts Zuschläge für Wartezeit, dunkle Haltestellen und lange Fußwege; Fußwege als sicherste Fußwege. Vorschlag „Mit Öffis“ nur, wenn mind. 4 min schneller als zu Fuß. Einschränkungen: keine Feiertags-Fahrpläne, keine Live-Verspätungen (Echtzeit-API ohne CORS → bräuchte Proxy, später), Fahrten auf der Karte als Linie zwischen den Stationen. Neu bauen mit `npm run transit` (läuft auch in `npm run data` und im Ablauf „Kartendaten aktualisieren“).
-- **Live-Standort-Link (Punkt 13), stiller Alarm (Täuschungs-PIN), gemeinsame Bewertungen (Block 5):** brauchen einen Server. Optionen (z. B. Supabase EU, Cloudflare Workers mit EU-Speicher, eigener kleiner Server in der EU) wurden vorgeschlagen; vor jeder Umsetzung fragen. Für den stillen Alarm per SMS bräuchte es zusätzlich einen SMS-Anbieter (Kosten).
+- **Server-Entscheidung (Nov. 2026): Supabase, Region Frankfurt** (Gratis-Tarif, Account der Projektinhaber·in). Einrichtung: `supabase/ANLEITUNG.md`.
+- **Live-Standort-Link – umgesetzt (wartet auf Einrichtung des Supabase-Projekts):** In der Begleitung „Link erstellen“ → SMS/WhatsApp/Teilen (Absenden selbst). Standort wird im Browser mit AES-GCM verschlüsselt, Schlüssel nur im Link nach `#` (`?live=ID#SCHLÜSSEL`), Supabase speichert nur Geheimtext. Tabelle `live_shares` ohne direkten Zugriff (RLS ohne Policies), nur RPC-Funktionen `live_put` (mit geheimem Schreib-Token, Hash gespeichert), `live_get`, `live_end` (`supabase/live.sql`, mit lokalem Postgres getestet). Senden alle 15–60 s (bei Bewegung ≥ 20 m früher), Eintrag verfällt 60 min nach letzter Aktualisierung, max. 4 h, beim Beenden der Begleitung sofort gelöscht. Nur aktuelle Position + Genauigkeit + Zeit, nie Ziel/Zuhause/Route/Name. Ist ein Link aktiv, enthalten Hilfe-Nachrichten an Kontakte ihn zusätzlich. Ansicht für Kontakte: `LiveViewer` (Karte, „Standort vor X min“, Hinweis bei veraltetem Standort, 133/112, kein Notruf). Logik `src/core/liveShare.ts` (getestet), Web `src/web/liveShare.ts`, `LiveShareBox`. Ohne Secrets: „noch nicht eingerichtet“.
+- **Stiller Alarm (Täuschungs-PIN), gemeinsame Bewertungen (Block 5):** könnten auf demselben Supabase-Projekt aufbauen; vor Umsetzung fragen. Idee für stillen Alarm ohne SMS-Kosten: Täuschungs-PIN lässt einen aktiven Live-Link heimlich weiterlaufen und markiert ihn als „Achtung“. Per SMS bräuchte es zusätzlich einen SMS-Anbieter (Kosten).
 - **Gemeinsame Bewertungen vorbereitet** (`src/core/sharedRatings.ts`, getestet): erst ab 3 verschiedenen Geräten wirksam, Halbwertszeit 180 Tage, nach 730 Tagen verfallen, pro Gerät und Wegstück nur die neueste, max. 20 pro Gerät und Tag, Notizen und freie Orte werden nie geteilt. Teilen wäre Opt-in, standardmäßig bleibt alles lokal.
 - **Phase 4 Rest:** installierbar als PWA (Manifest, Service Worker, Offline-Daten), Barrierefreiheit prüfen (Kontraste, Schriftgrößen, Screenreader).
 
@@ -122,5 +124,5 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 ## Befehle
 - `npm run dev` / `npm run dev:https` – Entwicklung
 - `npm run data` – Kartendaten neu bauen (`-- --refresh` lädt Rohdaten neu)
-- `npm test` – Tests (Routing, Farbstufen, Parks, Begleit-Eskalation inkl. Abweichung/Ankunft/Täuschungs-PIN, Bewertungen, gemeinsame Bewertungen, Zusatzdaten)
+- `npm test` – Tests (Live-Standort-Link, Öffis, Routing, Farbstufen, Parks, Begleit-Eskalation inkl. Abweichung/Ankunft/Täuschungs-PIN, Bewertungen, gemeinsame Bewertungen, Zusatzdaten)
 - `npm run build` – fertige Version in `dist/`

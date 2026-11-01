@@ -7,6 +7,8 @@ import type { VoiceMode } from '../signals';
 import { CallScreen } from './CallScreen';
 import { ContactActions, EmergencyButtons, SilentCallHint } from './EmergencyMenu';
 import { PinDialog } from './PinDialog';
+import { LiveShareBox } from './LiveShareBox';
+import type { useLiveShare } from '../liveShare';
 
 interface Props {
   session: EscortSession;
@@ -32,10 +34,11 @@ interface Props {
   compact: boolean;
   onToggleCompact: () => void;
   remaining: { meters: number; seconds: number; offRoute: boolean } | null;
+  live: ReturnType<typeof useLiveShare>;
 }
 
 /** Laufende Begleitung mit Eskalationsstufen */
-export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onReroute, onDecoy, onTalkCall, voiceMode, awayFor, onClearAway, compact, onToggleCompact, remaining }: Props) {
+export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onReroute, onDecoy, onTalkCall, voiceMode, awayFor, onClearAway, compact, onToggleCompact, remaining, live }: Props) {
   const pinKind = useRef<'real' | 'decoy' | null>(null);
   const [pinFor, setPinFor] = useState<'arrive' | 'cancel' | 'cancelAlarm' | null>(null);
   const { state } = session;
@@ -88,7 +91,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
               <>
                 <p>Benachrichtige jetzt deine Kontakte. Die Nachricht mit deinem Standort ist schon vorbereitet.</p>
                 {chosen.map((c) => (
-                  <ContactActions key={c.id} contact={c} kind="help" lastPosition={lastPos} />
+                  <ContactActions key={c.id} contact={c} kind="help" lastPosition={lastPos} liveLink={live.link} />
                 ))}
               </>
             ) : (
@@ -108,7 +111,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
             <p className="fineprint">Die App ruft nie selbst die Polizei. Du entscheidest.</p>
             <SilentCallHint />
             {chosen.map((c) => (
-              <ContactActions key={c.id} contact={c} kind="help" lastPosition={lastPos} />
+              <ContactActions key={c.id} contact={c} kind="help" lastPosition={lastPos} liveLink={live.link} />
             ))}
           </>
         )}
@@ -132,7 +135,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
   const minutes = Math.round((now - state.startedAt) / 60000);
   const summary = (
     <span className="escort-summary">
-      <span className="live-dot" aria-hidden /> {session.destination} · seit {minutes} min
+      <span className="live-dot" aria-hidden /> {session.destination} · seit {minutes} min{live.link ? ' · 🔗 Live-Link aktiv' : ''}
       {remaining && (
         <>
           {' '}
@@ -241,6 +244,8 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
           Ich brauche Hilfe
         </button>
       </div>
+
+      <LiveShareBox live={live} contacts={chosen} now={now} />
 
       {awayFor !== null && (
         <div className="notice">
