@@ -16,6 +16,8 @@ import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
 import { EscortView } from './components/EscortView';
 import { HomeSettings } from './components/HomeSettings';
+import { Onboarding } from './components/Onboarding';
+import { PrivacyPage } from './components/PrivacyPage';
 import { Legend } from './components/Legend';
 import { Modal } from './components/Modal';
 import { MapView, type MapHandle } from './components/MapView';
@@ -29,7 +31,7 @@ import { TimePicker } from './components/TimePicker';
 import { getPlanner, getStops } from './data';
 import { formatDistance, formatDuration, formatTime } from './format';
 import type { Place } from './geocode';
-import { useStored } from './storage';
+import { clearAll, useStored } from './storage';
 import { useEscort } from './useEscort';
 import { unlockAudio } from './signals';
 
@@ -73,6 +75,9 @@ export function App() {
   const [home, setHome] = useStored<Place | null>('home', null);
   const [favorites, setFavorites] = useStored<Place[]>('favorites', []);
   const [homePromptDone, setHomePromptDone] = useStored<boolean>('homePromptDone', false);
+  const [onboardingDone, setOnboardingDone, onboardingLoaded] = useStored<boolean>('onboardingDone', false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const map = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -252,6 +257,21 @@ export function App() {
     if (!start) locate();
   }, [home, start, locate]);
 
+  // Einführung beim ersten Start
+  useEffect(() => {
+    if (onboardingLoaded && !onboardingDone) setShowOnboarding(true);
+  }, [onboardingLoaded, onboardingDone]);
+
+  const deleteAll = useCallback(async () => {
+    if (escort.session) {
+      window.alert('Bitte beende zuerst die Begleitung (mit deiner PIN). Danach kannst du alle Daten löschen.');
+      return;
+    }
+    if (!window.confirm('Wirklich alle deine Daten auf diesem Gerät löschen? Zuhause, Lieblingsorte, Kontakte, Bewertungen und Einstellungen werden entfernt.')) return;
+    await clearAll();
+    window.location.reload();
+  }, [escort.session]);
+
   const isFavorite = !!end && favorites.some((f) => f.coords[0] === end.coords[0] && f.coords[1] === end.coords[1]);
 
   const chosen = plan?.[selected];
@@ -407,7 +427,7 @@ export function App() {
               </button>
             )}
           </div>
-          {!home && !homePromptDone && (
+          {!home && !homePromptDone && onboardingDone && (
             <div className="notice home-prompt">
               <b>Zuhause festlegen?</b> Dann planst du mit einem Tipp den sichersten Heimweg. Bleibt nur auf deinem Gerät.
               <div className="tp-row">
@@ -538,6 +558,21 @@ export function App() {
             onLocate={() => locate((p) => setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }))}
           />
           <section className="settings-section">
+            <h3>Hilfe und Datenschutz</h3>
+            <div className="tp-row">
+              <button type="button" className="chip" onClick={() => (setShowSettings(false), setShowOnboarding(true))}>
+                Einführung ansehen
+              </button>
+              <button type="button" className="chip" onClick={() => setShowPrivacy(true)}>
+                Datenschutz
+              </button>
+            </div>
+            <button type="button" className="btn danger delete-all" onClick={deleteAll}>
+              Alle meine Daten löschen
+            </button>
+            <p className="fineprint">Löscht Zuhause, Lieblingsorte, Kontakte, Bewertungen und Einstellungen auf diesem Gerät. Das kann nicht rückgängig gemacht werden.</p>
+          </section>
+          <section className="settings-section">
             <h3>Begleitmodus</h3>
             <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
           </section>
@@ -641,6 +676,25 @@ export function App() {
           }}
         />
       )}
+
+      {showOnboarding && (
+        <Onboarding
+          home={home}
+          onHomeChange={setHome}
+          contacts={contacts}
+          onContactsChange={setContacts}
+          bbox={bbox}
+          onLocateHome={() => locate((p) => setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }))}
+          onShowPrivacy={() => setShowPrivacy(true)}
+          onDone={() => {
+            setShowOnboarding(false);
+            setOnboardingDone(true);
+            setHomePromptDone(true);
+          }}
+        />
+      )}
+
+      {showPrivacy && <PrivacyPage onClose={() => setShowPrivacy(false)} onDeleteAll={deleteAll} />}
 
       {fakeAt && <FakeCallCountdown at={fakeAt} onFire={() => (setFakeAt(null), setFakeCall(true))} onCancel={() => setFakeAt(null)} />}
 

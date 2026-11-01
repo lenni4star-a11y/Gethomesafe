@@ -9,9 +9,11 @@ interface Props {
   onLocate?: () => void;
   onPickOnMap: () => void;
   picking: boolean;
+  /** Knopf „auf der Karte wählen“ ausblenden */
+  hidePick?: boolean;
 }
 
-export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap, picking }: Props) {
+export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap, picking, hidePick }: Props) {
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Place[]>([]);
@@ -76,7 +78,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
             ◎
           </button>
         )}
-        <button
+        {!hidePick && <button
           type="button"
           className={`icon-btn ${picking ? 'active' : ''}`}
           onClick={onPickOnMap}
@@ -85,7 +87,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
           title="Auf der Karte wählen"
         >
           ⌖
-        </button>
+        </button>}
       </div>
       {open && (results.length > 0 || busy) && (
         <ul id={listId} className="suggestions" role="listbox">

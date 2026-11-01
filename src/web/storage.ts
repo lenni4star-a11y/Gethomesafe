@@ -1,6 +1,6 @@
 // Lokale Speicherung im Gerät (IndexedDB). Kein Server, keine Accounts.
 
-import { del, get, set } from 'idb-keyval';
+import { clear, del, get, set } from 'idb-keyval';
 import { useCallback, useEffect, useState } from 'react';
 
 export async function load<T>(key: string, fallback: T): Promise<T> {
@@ -48,4 +48,19 @@ export function useStored<T>(key: string, fallback: T, normalize: (v: T) => T = 
     [key],
   );
   return [value, update, ready];
+}
+
+/** Alle Daten dieser App auf dem Gerät löschen (IndexedDB, localStorage, sessionStorage) */
+export async function clearAll(): Promise<void> {
+  try {
+    await clear();
+  } catch {
+    /* egal */
+  }
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {
+    /* egal */
+  }
 }

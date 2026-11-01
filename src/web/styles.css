@@ -2304,3 +2304,113 @@ a.btn {
 .sp-bottom {
   padding-right: 92px;
 }
+
+/* ---------- Runde 4, Block 1: Einführung und Datenschutz */
+
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 24; /* unter dem SOS-Knopf */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
+  background: rgba(10, 9, 16, 0.92);
+}
+
+.ob-card {
+  width: 100%;
+  max-width: 520px;
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 96px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.ob-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ob-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.ob-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.ob-dots i.on {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.ob-card h2 {
+  margin: 4px 0 8px;
+  font-size: 1.35rem;
+}
+
+.ob-card h3 {
+  font-size: 1rem;
+  margin: 14px 0 4px;
+}
+
+.ob-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.ob-list li {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.ob-list.warn li {
+  border-left: 4px solid var(--warn);
+}
+
+.ob-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  padding-right: 80px;
+}
+
+.privacy h3 {
+  font-size: 1rem;
+  margin: 16px 0 6px;
+}
+
+.privacy ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+.delete-all {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.field > input,
+.field > select,
+.field > textarea {
+  width: 100%;
+  min-width: 0;
+}
