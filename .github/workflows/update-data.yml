@@ -1,0 +1,40 @@
+# Baut die Kartendaten neu (OSM, Stadt Wien, auf Mapillary-Fotos erkannte Laternen) und lädt sie hoch.
+# Start: GitHub → Actions → „Kartendaten aktualisieren“ → Run workflow.
+# Danach wird „App veröffentlichen“ automatisch angestoßen.
+name: Kartendaten aktualisieren
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run data
+        env:
+          NODE_OPTIONS: --max-old-space-size=6000
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+      - run: npm test
+      - name: Neue Daten hochladen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          git diff --cached --quiet && echo "Keine Änderungen" && exit 0
+          git commit -m "Kartendaten aktualisiert"
+          git push
+          # Pushes von GitHub Actions starten andere Abläufe nicht von selbst: Veröffentlichung anstoßen
+          gh workflow run pages.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}

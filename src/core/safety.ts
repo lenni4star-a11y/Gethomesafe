@@ -21,7 +21,8 @@ export type ParkAvoidance = keyof typeof PARK_FACTORS;
 
 /** Beleuchtung → Risiko */
 export function lightRisk(e: Edge): number {
-  if (e.lit === 'yes') return 0;
+  // Laternen nur auf Fotos erkannt: weniger verlässlich als OSM oder Stadt Wien
+  if (e.lit === 'yes') return e.litSource === 'mapillary' ? 0.15 : 0;
   if (e.lit === 'no') return 1;
   // unbekannt: Stadt-Wien-Daten geben einen Hinweis
   if (e.lampCoverage >= 0.3) return 0.35;
@@ -76,10 +77,13 @@ export interface SafetyContext {
   open: (poi: Poi) => OpenState;
   /** Eigene Bewertungen (1–5) für ein Wegstück zur gewählten Zeit, oder null */
   rating?: (e: Edge) => EdgeRating | null;
+  /** zur gewählten Zeit aktive Baustellen (IDs) */
+  activeWorks?: Set<string>;
 }
 
 export interface ContextOptions {
   parkAvoidance?: ParkAvoidance;
+  activeWorks?: Set<string>;
   rating?: (e: Edge) => EdgeRating | null;
 }
 
@@ -90,6 +94,7 @@ export function createContext(date: Date, dark: boolean, opts: ContextOptions = 
     dark,
     parkFactor: PARK_FACTORS[opts.parkAvoidance ?? 2],
     rating: opts.rating,
+    activeWorks: opts.activeWorks,
     open: (poi) => {
       let s = memo.get(poi.id);
       if (!s) memo.set(poi.id, (s = openState(poi, date)));
@@ -126,7 +131,9 @@ export interface EdgeRisk {
 export function edgeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): EdgeRisk {
   const w = ctx.dark ? WEIGHTS.night : WEIGHTS.day;
   const light = lightRisk(e);
-  const way = wayRisk(e, ctx.dark, ctx.parkFactor);
+  let way = wayRisk(e, ctx.dark, ctx.parkFactor);
+  // aktive Baustelle in der Nähe: leicht abwerten (Absperrungen, schlechtere Gehwege)
+  if (ctx.activeWorks && e.works.some((id) => ctx.activeWorks!.has(id))) way = Math.min(1, way + 0.15);
   const life = lifeRisk(e, pois, ctx);
   let risk = w.light * light + w.way * way + w.life * life;
 

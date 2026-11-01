@@ -5,7 +5,8 @@ import { along, bearing, distance, lineLength, turnAngle } from './geo';
 import type { Graph } from './graph';
 import { edgeSeconds, WALK_SPEED, type RawRoute, type RouteMode, type RouteStep } from './routing';
 import { edgeClass, edgeRisk, openPoisNear, scoreFromRisk, type SafetyClass, type SafetyContext } from './safety';
-import { Flag, WayKind, type Edge, type LngLat, type Poi } from './types';
+import { simpleHoursState, type OpenState } from './openingHours';
+import { Flag, WayKind, type Edge, type Extras, type LngLat, type Poi, type PublicToilet, type Roadworks, type TaxiStand } from './types';
 
 /** Abschnitt mit gleicher Farbstufe (grün/gelb/rot) */
 export interface ColorSegment {
@@ -47,6 +48,16 @@ export interface RouteSummary {
   instructions: Instruction[];
   hints: Hint[];
   dark: boolean;
+  /** Woher die Beleuchtungsinfo stammt (Anteile an der beleuchteten Strecke) */
+  litSources: { osm: number; stadt: number; mapillary: number };
+  /** zur gewählten Zeit aktive Baustellen am Weg */
+  works: Roadworks[];
+  /** nächster Taxistand nahe der Route (Stadt Wien) */
+  taxi: { stand: TaxiStand; distance: number; offset: number } | null;
+  /** öffentliche WCs bis 100 m neben der Route, mit Zustand zur gewählten Zeit */
+  toilets: { wc: PublicToilet; state: OpenState; offset: number }[];
+  /** Polizei-Standorte am Weg, die aus den Daten der Stadt Wien stammen */
+  policeFromCity: number;
 }
 
 const pct = (v: number) => Math.round(v * 100);
@@ -55,7 +66,7 @@ export function stepCoords(s: RouteStep): LngLat[] {
   return s.forward ? s.edge.coords : [...s.edge.coords].reverse();
 }
 
-export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): RouteSummary {
+export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, extras: Extras | null = null): RouteSummary {
   const coords: LngLat[] = [route.from];
   const segments: ColorSegment[] = [];
   const classLen: Record<SafetyClass, number> = { good: 0, medium: 0, bad: 0 };
@@ -66,6 +77,8 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
   let seconds = 0;
   let riskSum = 0;
   const litLen = { yes: 0, no: 0, unknown: 0 };
+  const litSrc = { osm: 0, stadt: 0, mapillary: 0 };
+  const workIds = new Set<string>();
   let parkLen = 0;
   let mainLen = 0;
   let tunnels = 0;
@@ -98,6 +111,8 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
     riskSum += r.risk * e.length;
     seconds += edgeSeconds(e);
     litLen[e.lit] += e.length;
+    if (e.lit === 'yes' && e.litSource !== 'none') litSrc[e.litSource] += e.length;
+    if (ctx.activeWorks) for (const id of e.works) if (ctx.activeWorks.has(id)) workIds.add(id);
     if (e.flags & Flag.Park) parkLen += e.length;
     if (e.kind === WayKind.Main) mainLen += e.length;
     if (e.flags & Flag.Tunnel) tunnels++;
@@ -157,7 +172,31 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
       ? 'keine geöffneten Orte direkt am Weg bekannt'
       : `${openList.length} ${openList.length === 1 ? 'geöffneter Ort' : 'geöffnete Orte'} am Weg`,
   );
-  if (openList.some((p) => p.cat === 'police')) reasons.push('vorbei an einer Polizeiinspektion');
+  const policeFromCity = openList.filter((p) => p.cat === 'police' && p.source === 'stadt').length;
+  if (openList.some((p) => p.cat === 'police')) reasons.push(`vorbei an einer Polizeiinspektion${policeFromCity ? ' (laut Stadt Wien)' : ''}`);
+
+  // Woher die Beleuchtungsinfo stammt
+  const litTotal = Math.max(1, litSrc.osm + litSrc.stadt + litSrc.mapillary);
+  const litSources = { osm: litSrc.osm / litTotal, stadt: litSrc.stadt / litTotal, mapillary: litSrc.mapillary / litTotal };
+  if (ctx.dark && litLen.yes > 0) {
+    const parts = [
+      litSources.osm >= 0.05 ? `${pct(litSources.osm)} % laut OpenStreetMap` : null,
+      litSources.stadt >= 0.05 ? `${pct(litSources.stadt)} % laut Leuchtenstandorten der Stadt Wien` : null,
+      litSources.mapillary >= 0.05 ? `${pct(litSources.mapillary)} % Laternen auf Mapillary-Fotos erkannt` : null,
+    ].filter(Boolean);
+    if (parts.length) reasons.push(`Beleuchtung: ${parts.join(', ')}`);
+  }
+
+  // Baustellen, Taxistand, WCs (Stadt Wien)
+  const works = (extras?.works ?? []).filter((w) => workIds.has(w.id));
+  for (const w of works.slice(0, 2)) reasons.push(`Baustelle am Weg${w.to ? ` (bis ${formatDay(w.to)})` : ''}`);
+  const taxi = nearestAlong(coords, extras?.taxi ?? [], 200);
+  if (taxi) reasons.push(taxi.distance <= 30 ? 'Taxistand direkt am Weg' : `Taxistand ${Math.round(taxi.distance / 10) * 10} m neben dem Weg`);
+  const toilets = (extras?.wc ?? [])
+    .map((wc) => ({ wc, hit: closestOnLine(coords, [wc.lon, wc.lat]) }))
+    .filter((t) => t.hit.distance <= 100)
+    .map((t) => ({ wc: t.wc, state: simpleHoursState(t.wc.hours, ctx.date), offset: t.hit.offset }))
+    .sort((a, b) => a.offset - b.offset);
   if (parkLen >= 100) reasons.push(`${Math.round(parkLen / 10) * 10} m durch Parks`);
   if (tunnels) reasons.push(tunnels === 1 ? '1 Unterführung' : `${tunnels} Unterführungen`);
   if (mainLen / netLen >= 0.5) reasons.push('überwiegend Hauptstraßen');
@@ -176,7 +215,43 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext): Ro
     instructions: buildInstructions(route, hints, approach),
     hints,
     dark: ctx.dark,
+    litSources,
+    works,
+    taxi: taxi && { stand: taxi.item, distance: taxi.distance, offset: taxi.offset },
+    toilets,
+    policeFromCity,
   };
+}
+
+function formatDay(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${Number(d)}.${Number(m)}.${y}`;
+}
+
+/** Nächster Punkt auf einer Linie: Abstand und Strecke ab Start */
+function closestOnLine(line: LngLat[], p: LngLat): { distance: number; offset: number } {
+  let best = { distance: Infinity, offset: 0 };
+  let acc = 0;
+  for (let i = 1; i < line.length; i++) {
+    const segLen = distance(line[i - 1], line[i]);
+    // grob: Abstand zum näheren Endpunkt oder zur Mitte genügt bei kurzen Kanten
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const q: LngLat = [line[i - 1][0] + (line[i][0] - line[i - 1][0]) * t, line[i - 1][1] + (line[i][1] - line[i - 1][1]) * t];
+      const d = distance(q, p);
+      if (d < best.distance) best = { distance: d, offset: acc + segLen * t };
+    }
+    acc += segLen;
+  }
+  return best;
+}
+
+function nearestAlong<T extends { lon: number; lat: number }>(line: LngLat[], items: T[], max: number): { item: T; distance: number; offset: number } | null {
+  let best: { item: T; distance: number; offset: number } | null = null;
+  for (const item of items) {
+    const hit = closestOnLine(line, [item.lon, item.lat]);
+    if (hit.distance <= max && (!best || hit.distance < best.distance)) best = { item, ...hit };
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------- Wegbeschreibung

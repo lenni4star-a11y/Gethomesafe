@@ -3,6 +3,8 @@ import type { DistrictFile, Edge, LitState, LngLat, Poi } from './types';
 
 /** Ab diesem Anteil an Leuchten in der Nähe gilt ein Weg als beleuchtet (Stadt-Wien-Daten) */
 export const LAMP_COVERAGE_LIT = 0.6;
+/** Ab diesem Anteil an auf Mapillary-Fotos erkannten Laternen gilt ein Weg (ohne andere Daten) als beleuchtet */
+export const MLY_COVERAGE_LIT = 0.5;
 
 const CELL = 0.002; // ca. 150–220 m
 
@@ -50,7 +52,7 @@ export class Graph {
     for (const p of file.pois) this.pois.set(p.id, p);
 
     for (const raw of file.edges) {
-      const [la, lb, length, kind, nameIdx, osmLit, cov, flags, geom, pois] = raw;
+      const [la, lb, length, kind, nameIdx, osmLit, cov, flags, geom, pois, mly = 0, works = []] = raw;
       const a = local[la];
       const b = local[lb];
       const coords: LngLat[] = [this.coords[a]];
@@ -58,14 +60,17 @@ export class Graph {
       coords.push(this.coords[b]);
 
       const lampCoverage = cov / 100;
+      const mlyCoverage = mly / 100;
       let lit: LitState = 'unknown';
       let litSource: Edge['litSource'] = 'none';
       if (osmLit === 1) [lit, litSource] = ['yes', 'osm'];
       else if (osmLit === 0) [lit, litSource] = ['no', 'osm'];
       else if (lampCoverage >= LAMP_COVERAGE_LIT) [lit, litSource] = ['yes', 'stadt'];
+      // Lücke füllen: Laternen auf Mapillary-Fotos erkannt (schwächer gewichtet, siehe safety.ts)
+      else if (mlyCoverage >= MLY_COVERAGE_LIT) [lit, litSource] = ['yes', 'mapillary'];
 
       const id = this.edges.length;
-      this.edges.push({ id, a, b, length, kind, name: file.names[nameIdx] ?? '', lit, lampCoverage, litSource, flags, coords, pois });
+      this.edges.push({ id, a, b, length, kind, name: file.names[nameIdx] ?? '', lit, lampCoverage, litSource, mlyCoverage, works, flags, coords, pois });
       this.adjacency[a].push(id);
       this.adjacency[b].push(id);
     }

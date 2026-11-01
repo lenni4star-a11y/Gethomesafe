@@ -38,6 +38,8 @@ export interface Poi {
   oh: string | null;
   /** genauere Art laut OSM (z. B. convenience, bar) bzw. Verkehrsmittel bei Stationen */
   kind?: string | null;
+  /** 'stadt' = aus den Daten der Stadt Wien (sonst OpenStreetMap) */
+  source?: string;
   lon: number;
   lat: number;
 }
@@ -54,6 +56,10 @@ export type RawEdge = [
   flags: number,
   geom: number[],
   pois: string[],
+  /** Anteil (0–100) in der Nähe einer auf Mapillary-Fotos erkannten Laterne (ab Datenstand Nov. 2026) */
+  mlyCoverage?: number,
+  /** IDs von Baustellen in der Nähe (siehe extras.json) */
+  works?: string[],
 ];
 
 export interface DistrictFile {
@@ -104,10 +110,49 @@ export interface Edge {
   lit: LitState;
   /** Anteil der Kante in der Nähe einer Leuchte laut Stadt Wien (0–1) */
   lampCoverage: number;
-  /** woher die Beleuchtungsinfo stammt */
-  litSource: 'osm' | 'stadt' | 'none';
+  /** woher die Beleuchtungsinfo stammt: OpenStreetMap, Leuchtenstandorte der Stadt Wien, auf Mapillary-Fotos erkannte Laternen */
+  litSource: 'osm' | 'stadt' | 'mapillary' | 'none';
+  /** Anteil der Kante in der Nähe einer auf Mapillary-Fotos erkannten Laterne (0–1) */
+  mlyCoverage: number;
+  /** Baustellen in der Nähe (IDs) */
+  works: string[];
   flags: number;
   /** Punkte von a nach b, inklusive Endpunkte */
   coords: LngLat[];
   pois: string[];
+}
+
+/** Zusatzdaten der Stadt Wien (extras.json) */
+export interface TaxiStand {
+  lon: number;
+  lat: number;
+  address: string;
+  spaces: number | null;
+}
+
+export interface PublicToilet {
+  lon: number;
+  lat: number;
+  name: string;
+  /** z. B. „00:00-24:00 Uhr“, „06:00-22:00 Uhr“ oder „Lokalöffnungszeiten“ */
+  hours: string | null;
+  note: string | null;
+  accessible: boolean;
+}
+
+export interface Roadworks {
+  id: string;
+  title: string;
+  kind: string | null;
+  /** JJJJ-MM-TT */
+  from: string | null;
+  to: string | null;
+  coords: LngLat[];
+}
+
+export interface Extras {
+  generated: string;
+  taxi: TaxiStand[];
+  wc: PublicToilet[];
+  works: Roadworks[];
 }

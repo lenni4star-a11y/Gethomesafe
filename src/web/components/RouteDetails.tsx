@@ -63,6 +63,65 @@ export function RouteDetails({ route, date, onFocus }: Props) {
 
       <OpenPlaces places={route.openPlaces} date={date} onFocus={onFocus} />
 
+      {(route.taxi || route.toilets.length > 0 || route.works.length > 0) && (
+        <section aria-labelledby="city-h">
+          <h3 id="city-h">Außerdem am Weg</h3>
+          <ul className="places">
+            {route.taxi && (
+              <li>
+                🚕{' '}
+                <button type="button" className="link-btn" onClick={() => onFocus([route.taxi!.stand.lon, route.taxi!.stand.lat])}>
+                  Taxistand {route.taxi.distance <= 30 ? 'direkt am Weg' : `${formatDistance(route.taxi.distance)} neben dem Weg`}
+                </button>
+                <span className="muted"> · {route.taxi.stand.address}, nach {formatDistance(route.taxi.offset)}</span>
+              </li>
+            )}
+            {route.works.map((w) => (
+              <li key={w.id}>
+                🚧{' '}
+                <button type="button" className="link-btn" onClick={() => onFocus(w.coords[Math.floor(w.coords.length / 2)])}>
+                  Baustelle{w.kind ? `: ${w.kind}` : ''}
+                </button>
+                <span className="muted">
+                  {' '}
+                  · {w.title}
+                  {w.to ? `, bis ${new Date(w.to).toLocaleDateString('de-AT')}` : ''}
+                </span>
+              </li>
+            ))}
+            {route.toilets.slice(0, 4).map((t, i) => (
+              <li key={i}>
+                🚻{' '}
+                <button type="button" className="link-btn" onClick={() => onFocus([t.wc.lon, t.wc.lat])}>
+                  Öffentliches WC
+                </button>
+                <span className="muted">
+                  {' '}
+                  · {t.wc.name}, {t.state === 'open' ? 'jetzt offen' : t.state === 'closed' ? 'jetzt geschlossen' : t.wc.hours ?? 'Zeiten unbekannt'}
+                  {t.wc.accessible ? ', barrierefrei' : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="fineprint">Taxistände, WCs und Baustellen: Stadt Wien – data.wien.gv.at (CC BY 4.0). Baustellen nur „verkehrswirksame“, Stand beim letzten Datenupdate.</p>
+        </section>
+      )}
+
+      <section aria-labelledby="src-h">
+        <h3 id="src-h">Woher die Einschätzung kommt</h3>
+        <ul className="sources">
+          {route.dark && (
+            <li>
+              Beleuchtung: {Math.round(route.litSources.osm * 100)} % laut OpenStreetMap, {Math.round(route.litSources.stadt * 100)} % laut Leuchtenstandorten der Stadt Wien,{' '}
+              {Math.round(route.litSources.mapillary * 100)} % Laternen auf Mapillary-Fotos erkannt (schwächer gewichtet).
+            </li>
+          )}
+          <li>Wegart, Parks, Unterführungen: OpenStreetMap.</li>
+          <li>Geöffnete Orte: Öffnungszeiten aus OpenStreetMap{route.policeFromCity ? ', Polizei auch laut Stadt Wien' : ''}; Öffi-Stationen nach ungefähren Betriebszeiten.</li>
+          <li>Deine eigenen Bewertungen (nur auf diesem Gerät).</li>
+        </ul>
+      </section>
+
       <section aria-labelledby="steps-h">
         <h3 id="steps-h">Schritt für Schritt</h3>
         <ol className="steps">

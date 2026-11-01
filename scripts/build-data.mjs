@@ -11,6 +11,8 @@
 // Aufruf: npm run data   (Rohdaten neu laden: npm run data -- --refresh)
 
 import { createOSMStream } from 'osm-pbf-parser-node';
+import { VectorTile } from '@mapbox/vector-tile';
+import Pbf from 'pbf';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +21,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = path.join(ROOT, 'data-raw');
 const OUT = path.join(ROOT, 'public', 'data');
 const REFRESH = process.argv.includes('--refresh');
+
+// Mapillary-Token für erkannte Straßenlaternen: aus der Umgebung (GitHub-Secret MAPILLARY_TOKEN) oder aus .env
+function readToken() {
+  if (process.env.MAPILLARY_TOKEN) return process.env.MAPILLARY_TOKEN.trim();
+  if (process.env.VITE_MAPILLARY_TOKEN) return process.env.VITE_MAPILLARY_TOKEN.trim();
+  try {
+    const env = fs.readFileSync(path.join(ROOT, '.env'), 'utf8');
+    return env.match(/^VITE_MAPILLARY_TOKEN=(.*)$/m)?.[1]?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+const MLY_TOKEN = readToken();
 
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'gebiet.json'), 'utf8'));
 const PILOT = config.bezirke.map(Number);
@@ -243,6 +258,92 @@ async function main() {
   }
   log('Leuchten im Gebiet:', lampCount);
 
+  // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
+  const mlyGrid = new Grid(25);
+  let mlyCount = 0;
+  if (MLY_TOKEN) {
+    const z = 14;
+    const tx = (lon) => Math.floor(((lon + 180) / 360) * 2 ** z);
+    const ty = (lat) => Math.floor(((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) * 2 ** z);
+    const tiles = new Set();
+    for (const b of bezirke) for (let x = tx(b.bbox[0]); x <= tx(b.bbox[2]); x++) for (let y = ty(b.bbox[3]); y <= ty(b.bbox[1]); y++) tiles.add(`${x}/${y}`);
+    fs.mkdirSync(path.join(RAW, 'mapillary'), { recursive: true });
+    let n = 0;
+    for (const t of tiles) {
+      const [x, y] = t.split('/').map(Number);
+      const file = path.join('mapillary', `features-${z}-${x}-${y}.pbf`);
+      let target;
+      try {
+        target = await download(`https://tiles.mapillary.com/maps/vtp/mly_map_feature_point/2/${z}/${x}/${y}?access_token=${encodeURIComponent(MLY_TOKEN)}`, file);
+      } catch (e) {
+        log('  Kachel übersprungen:', t, e.message);
+        continue;
+      }
+      const vt = new VectorTile(new Pbf(fs.readFileSync(target)));
+      const layer = vt.layers.point;
+      if (!layer) continue;
+      for (let i = 0; i < layer.length; i++) {
+        const f = layer.feature(i);
+        if (f.properties.value !== 'object--street-light') continue;
+        const [lon, lat] = f.toGeoJSON(x, y, z).geometry.coordinates;
+        if (!inArea(lon, lat)) continue;
+        mlyGrid.add(lon, lat, [lon, lat]);
+        mlyCount++;
+      }
+      if (++n % 10 === 0) log(`  Mapillary-Kacheln: ${n}/${tiles.size}`);
+    }
+    log('Auf Mapillary-Fotos erkannte Laternen im Gebiet:', mlyCount);
+  } else log('Kein Mapillary-Token: erkannte Laternen werden übersprungen.');
+
+  // 2c. Weitere Daten der Stadt Wien: Polizei, Taxistandplätze, öffentliche WCs, Baustellen
+  const wienPolice = readJson(await download(WFS + 'POLIZEIOGD', 'polizei.json')).features.filter((f) => inArea(...f.geometry.coordinates));
+  const taxi = readJson(await download(WFS + 'TAXIOGD', 'taxi.json'))
+    .features.map((f) => {
+      const c = f.geometry.type === 'Point' ? f.geometry.coordinates : f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)];
+      return { lon: +c[0].toFixed(5), lat: +c[1].toFixed(5), address: f.properties.ADRESSE, spaces: f.properties.STELLPLATZANZAHL ?? null };
+    })
+    .filter((t) => inArea(t.lon, t.lat));
+  const wc = readJson(await download(WFS + 'WCANLAGE2OGD', 'wc.json'))
+    .features.filter((f) => f.properties.AKTIV_TXT !== 'NEIN')
+    .map((f) => ({
+      lon: +f.geometry.coordinates[0].toFixed(5),
+      lat: +f.geometry.coordinates[1].toFixed(5),
+      name: [f.properties.STRASSE, f.properties.ORTSANGABE].filter(Boolean).join(', '),
+      hours: f.properties.OEFFNUNGSZEIT ?? null,
+      note: f.properties.EINSCHRAENKUNGEN ?? null,
+      accessible: /barrierefrei/i.test(`${f.properties.KATEGORIE ?? ''} ${f.properties.ICON_TXT ?? ''}`),
+    }))
+    .filter((w) => inArea(w.lon, w.lat));
+  // Baustellen ändern sich laufend: immer frisch laden
+  const worksRaw = [];
+  for (const layer of ['BAUSTELLENLINOGD', 'BAUSTELLENPKTOGD']) {
+    const res = await fetch(WFS + layer);
+    if (!res.ok) continue;
+    for (const f of (await res.json()).features) {
+      const coords = f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates.flat();
+      if (!coords.some(([lon, lat]) => inArea(lon, lat))) continue;
+      worksRaw.push({
+        id: 'bs' + f.properties.OBJECTID,
+        title: f.properties.BEZEICHNUNG,
+        kind: f.properties.BEHINDERUNGSART ?? null,
+        from: f.properties.OBJEKT_BEGINN?.slice(0, 10) ?? null,
+        to: f.properties.OBJEKT_ENDE?.slice(0, 10) ?? null,
+        coords: coords.map(([lon, lat]) => [+lon.toFixed(5), +lat.toFixed(5)]),
+      });
+    }
+  }
+  const worksGrid = new Grid(50);
+  for (const w of worksRaw) {
+    // Punkte entlang der Baustellenlinie alle ~10 m
+    for (let i = 0; i < w.coords.length; i++) {
+      const a = w.coords[i];
+      const b = w.coords[i + 1] ?? a;
+      const n = Math.max(1, Math.ceil(dist(a, b) / 10));
+      for (let k = 0; k < n; k++) worksGrid.add(a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, { id: w.id, at: [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n] });
+    }
+  }
+  log(`Stadt Wien: ${wienPolice.length} Polizei, ${taxi.length} Taxistandplätze, ${wc.length} WCs, ${worksRaw.length} Baustellen im Gebiet`);
+
   // 3. Öffi-Haltestellen
   const stopFile = await download(WFS + 'OEFFHALTESTOGD', 'haltestellen.json');
   const LTYP = { 4: 'ubahn', 5: 'sbahn', 1: 'tram', 2: 'bus', 3: 'bus', 9: 'tram', 10: 'bus', 11: 'bus', 12: 'bus', 13: 'bus' };
@@ -350,6 +451,12 @@ async function main() {
     const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
     if (inArea(lon, lat)) pois.push({ id: 'w' + w.id, cat: w.cat, t: w.t, lon, lat });
   }
+  for (const f of wienPolice) {
+    const [lon, lat] = f.geometry.coordinates;
+    const osmTwin = pois.some((p) => p.cat === 'police' && dist([p.lon, p.lat], [lon, lat]) < 80);
+    if (osmTwin) continue;
+    pois.push({ id: 'pol' + f.properties.SE_SDO_ROWID, cat: 'police', t: { name: f.properties.NAME, source: 'stadt' }, lon, lat });
+  }
   for (const s of stops) {
     const oh = STOP_HOURS[s.type] + (s.lines.some((l) => /^N\d/.test(l)) ? '; Mo-Su 00:00-05:00' : '');
     pois.push({ id: s.id, cat: 'transit', t: { name: s.name, opening_hours: oh, kind: s.type }, lon: s.lon, lat: s.lat });
@@ -453,6 +560,11 @@ async function main() {
       let covered = 0;
       for (const s of samples) if (lampGrid.near(s[0], s[1]).some((l) => dist(l, s) <= 22)) covered++;
       const lampCov = Math.round((covered / samples.length) * 100);
+      let mlyCovered = 0;
+      if (mlyCount) for (const s of samples) if (mlyGrid.near(s[0], s[1]).some((l) => dist(l, s) <= 20)) mlyCovered++;
+      const mlyCov = Math.round((mlyCovered / samples.length) * 100);
+      const works = new Set();
+      for (let k = 0; k < samples.length; k += 2) for (const w of worksGrid.near(samples[k][0], samples[k][1])) if (dist(w.at, samples[k]) <= 25) works.add(w.id);
 
       let f2 = flags;
       if (KIND[r.kind] >= KIND.pedestrian && inGreen(mid)) f2 |= F.PARK;
@@ -489,7 +601,7 @@ async function main() {
       const poiIds = [...near].map((pi) => pois[pi].id);
       poiIds.forEach((id) => file.pois.add(id));
       // Schema siehe src/core/types.ts (RawEdge)
-      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds]);
+      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works]]);
       edgeCount++;
     }
   }
@@ -501,7 +613,8 @@ async function main() {
     generated: new Date().toISOString(),
     attribution: [
       '© OpenStreetMap-Mitwirkende (ODbL)',
-      'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen',
+      'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen',
+      ...(mlyCount ? ['Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)'] : []),
     ],
     bezirke: [],
   };
@@ -515,6 +628,7 @@ async function main() {
         name: p.t.name ?? null,
         oh: p.t.opening_hours ?? null,
         kind: p.t.kind ?? p.t.shop ?? p.t.amenity ?? p.t.tourism ?? null,
+        ...(p.t.source ? { source: p.t.source } : {}),
         lon: +p.lon.toFixed(5),
         lat: +p.lat.toFixed(5),
       };
@@ -542,6 +656,10 @@ async function main() {
   }
   fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(index));
   fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(stops));
+  // Zusatzdaten (klein, für alle Bezirke gemeinsam)
+  const extras = { generated: index.generated, taxi, wc, works: worksRaw };
+  fs.writeFileSync(path.join(OUT, 'extras.json'), JSON.stringify(extras));
+  log(`  extras.json: ${(JSON.stringify(extras).length / 1024).toFixed(0)} KB`);
   log('fertig →', path.relative(ROOT, OUT));
 }
 

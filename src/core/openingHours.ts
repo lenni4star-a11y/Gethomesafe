@@ -49,3 +49,15 @@ export function closesAt(poi: Poi, date: Date): Date | null {
     return null;
   }
 }
+
+/** Öffnungszeit eines öffentlichen WCs der Stadt Wien („06:00-22:00 Uhr“, „00:00-24:00 Uhr“) */
+export function simpleHoursState(hours: string | null, date: Date): OpenState {
+  const m = hours?.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!m) return 'unknown';
+  const from = Number(m[1]) * 60 + Number(m[2]);
+  const to = Number(m[3]) * 60 + Number(m[4]);
+  const now = date.getHours() * 60 + date.getMinutes();
+  if (from === 0 && to >= 24 * 60) return 'open';
+  const open = from <= to ? now >= from && now < to : now >= from || now < to;
+  return open ? 'open' : 'closed';
+}
