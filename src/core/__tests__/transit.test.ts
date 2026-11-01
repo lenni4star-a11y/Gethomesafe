@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { formatClock, TransitNetwork, type RideLeg, type TransitData } from '../transit';
+import { recommendTransit } from '../planner';
+import type { RouteSummary } from '../analysis';
 
 const data = JSON.parse(readFileSync('public/data/transit.json', 'utf8')) as TransitData;
 const net = new TransitNetwork(data);
@@ -44,5 +46,15 @@ describe('Öffi-Routing (Fahrplan)', () => {
     expect(opts.length).toBeGreaterThan(0);
     expect(rides(opts[0]).every((r) => r.line.startsWith('N') || r.line.startsWith('U') === false)).toBe(true);
     console.log('Nacht Mi:', rides(opts[0]).map((r) => `${r.line} ${formatClock(r.departMin)}`).join(' · '));
+  });
+});
+
+describe('Öffis vorauswählen', () => {
+  const r = (min: number) => ({ seconds: min * 60 }) as unknown as RouteSummary;
+  it('nur bei langem Fußweg und deutlich schnelleren Öffis', () => {
+    expect(recommendTransit({ safest: r(72), transit: r(28) })).toBe(true);
+    expect(recommendTransit({ safest: r(20), transit: r(10) })).toBe(false);
+    expect(recommendTransit({ safest: r(40), transit: r(35) })).toBe(false);
+    expect(recommendTransit({ safest: r(40), transit: null })).toBe(false);
   });
 });

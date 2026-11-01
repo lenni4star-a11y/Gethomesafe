@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PlanResult, Planner } from '../core/planner';
+import { recommendTransit, type PlanResult, type Planner } from '../core/planner';
 import type { RouteMode } from '../core/routing';
 
 /** gewählte Route: zu Fuß sicherste / schnellste oder mit Öffis */
@@ -134,6 +134,9 @@ export function App() {
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
         else setSheet('collapsed');
         setPlan(res);
+        // lange Strecke und Öffis deutlich schneller → Öffis gleich vorauswählen, sonst sicherste Fußroute
+        if (res && recommendTransit(res)) setSelected('transit');
+        else setSelected((cur) => (cur === 'transit' && !res?.transit ? 'safest' : cur));
         setPlanTime(when);
       })
       .catch(() => !cancelled && setMessage('Beim Berechnen ist etwas schiefgegangen. Bitte versuch es noch einmal.'))
@@ -415,6 +418,7 @@ export function App() {
                   <small>{selected === 'safest' ? 'Sicherste Route' : selected === 'transit' && chosen.mode === 'transit' ? `Mit Öffis (${transitLines(chosen)})` : 'Schnellste Route'} · Wert {chosen.score}/10</small>
                   <b>
                     {formatDuration(chosen.seconds)} · {formatDistance(chosen.length)}
+                    {chosen.mode === 'transit' ? ' zu Fuß' : ''}
                   </b>
                 </button>
               ) : (
@@ -479,7 +483,7 @@ export function App() {
 
           {plan && (
             <>
-              <div className="route-cards" role="radiogroup" aria-label="Route wählen">
+              <div className={`route-cards ${plan.transit ? 'three' : ''}`} role="radiogroup" aria-label="Route wählen">
                 {(['safest', 'fastest', ...(plan.transit ? (['transit'] as const) : [])] as const).map((m) => {
                   const r = m === 'transit' ? plan.transit! : plan[m];
                   return (

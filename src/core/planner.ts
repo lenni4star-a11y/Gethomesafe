@@ -159,6 +159,16 @@ export class Planner {
   }
 }
 
+/**
+ * Soll die App die Öffi-Variante gleich vorauswählen? Ja, wenn der Fußweg lang ist (ab 25 min)
+ * und die Öffis mindestens ein Drittel schneller sind. Sonst bleibt die sicherste Fußroute vorausgewählt.
+ */
+export function recommendTransit(plan: Pick<PlanResult, 'safest' | 'transit'>): boolean {
+  const t = plan.transit;
+  if (!t) return false;
+  return plan.safest.seconds >= 25 * 60 && t.seconds <= plan.safest.seconds * (2 / 3);
+}
+
 /** Ist eine Baustelle am gewählten Tag aktiv? (Datum als JJJJ-MM-TT) */
 export function isActive(from: string | null, to: string | null, date: Date): boolean {
   const pad = (n: number) => String(n).padStart(2, '0');
