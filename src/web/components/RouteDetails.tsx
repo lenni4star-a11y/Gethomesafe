@@ -129,7 +129,7 @@ export function RouteDetails({ route, date, onFocus }: Props) {
             <li key={i}>
               <button type="button" className="step" onClick={() => onFocus(s.at)}>
                 <span>{s.text}</span>
-                <span className="muted">{formatDistance(s.length)}</span>
+                {s.length > 0 && <span className="muted">{formatDistance(s.length)}</span>}
               </button>
               {s.hints.length > 0 && <span className="step-hints">{s.hints.map((h) => h.text).join(' · ')}</span>}
             </li>

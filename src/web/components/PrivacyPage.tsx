@@ -75,7 +75,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
 
         <h3>Datenquellen</h3>
         <p className="muted">
-          Kartendaten © OpenStreetMap-Mitwirkende (ODbL). Stadt Wien – data.wien.gv.at (CC BY 4.0). Straßenfotos © Mapillary-Mitwirkende (CC BY-SA 4.0).
+          Kartendaten © OpenStreetMap-Mitwirkende (ODbL). Stadt Wien – data.wien.gv.at (CC BY 4.0). Öffi-Fahrplan: Wiener Linien Open Data (CC BY 4.0), in der App gespeichert – für Öffi-Vorschläge wird kein Dienst aufgerufen. Straßenfotos © Mapillary-Mitwirkende (CC BY-SA 4.0).
         </p>
         <p className="fineprint">Prototyp, Stand November 2026. Fragen und Hinweise bitte an die Projektverantwortlichen.</p>
       </div>

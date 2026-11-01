@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanResult, Planner } from '../core/planner';
 import type { RouteMode } from '../core/routing';
+
+/** gewählte Route: zu Fuß sicherste / schnellste oder mit Öffis */
+export type Selection = RouteMode | 'transit';
 import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings';
 import { isDark } from '../core/sun';
 import type { LngLat } from '../core/types';
@@ -48,7 +51,7 @@ export function App() {
   const [customTime, setCustomTime] = useState<Date | null>(null);
   const [plan, setPlan] = useState<PlanResult | null>(null);
   const [planTime, setPlanTime] = useState<Date>(new Date());
-  const [selected, setSelected] = useState<RouteMode>('safest');
+  const [selected, setSelected] = useState<Selection>('safest');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
@@ -276,7 +279,7 @@ export function App() {
 
   const isFavorite = !!end && favorites.some((f) => f.coords[0] === end.coords[0] && f.coords[1] === end.coords[1]);
 
-  const chosen = plan?.[selected];
+  const chosen = selected === 'transit' ? (plan?.transit ?? plan?.safest) : plan?.[selected];
 
   // Restweg während der Begleitung (aus geplanter Route und letzter Position)
   const escortRemaining = useMemo(() => {
@@ -409,7 +412,7 @@ export function App() {
             <div className="collapsed-row">
               {chosen ? (
                 <button type="button" className="collapsed-main" onClick={() => setSheet('half')} aria-label="Routen-Menü öffnen">
-                  <small>{selected === 'safest' ? 'Sicherste Route' : 'Schnellste Route'} · Wert {chosen.score}/10</small>
+                  <small>{selected === 'safest' ? 'Sicherste Route' : selected === 'transit' && chosen.mode === 'transit' ? `Mit Öffis (${transitLines(chosen)})` : 'Schnellste Route'} · Wert {chosen.score}/10</small>
                   <b>
                     {formatDuration(chosen.seconds)} · {formatDistance(chosen.length)}
                   </b>
@@ -477,8 +480,8 @@ export function App() {
           {plan && (
             <>
               <div className="route-cards" role="radiogroup" aria-label="Route wählen">
-                {(['safest', 'fastest'] as const).map((m) => {
-                  const r = plan[m];
+                {(['safest', 'fastest', ...(plan.transit ? (['transit'] as const) : [])] as const).map((m) => {
+                  const r = m === 'transit' ? plan.transit! : plan[m];
                   return (
                     <button
                       key={m}
@@ -488,13 +491,13 @@ export function App() {
                       className={`route-card ${selected === m ? 'selected' : ''}`}
                       onClick={() => setSelected(m)}
                     >
-                      <span className="rc-title">{m === 'safest' ? 'Sicherste' : 'Schnellste'}</span>
+                      <span className="rc-title">{m === 'safest' ? 'Sicherste' : m === 'fastest' ? 'Schnellste' : 'Mit Öffis'}</span>
                       <span className="rc-score" aria-label={`Sicherheitswert ${r.score} von 10`}>
                         <b>{r.score}</b>
                         <small>/10</small>
                       </span>
                       <span className="rc-meta">
-                        {formatDuration(r.seconds)} · {formatDistance(r.length)}
+                        {formatDuration(r.seconds)} · {m === 'transit' ? transitLines(r) : formatDistance(r.length)}
                       </span>
                     </button>
                   );
@@ -768,4 +771,12 @@ function SheetGrabber({ state, onChange }: { state: SheetState; onChange: (s: Sh
       <span />
     </button>
   );
+}
+
+/** Linien einer Öffi-Route, z. B. „U3 → U1“ */
+function transitLines(r: { transit?: { legs: { type: string; line?: string }[] } }): string {
+  return (r.transit?.legs ?? [])
+    .filter((l) => l.type === 'ride')
+    .map((l) => l.line)
+    .join(' → ');
 }

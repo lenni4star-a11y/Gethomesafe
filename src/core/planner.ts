@@ -6,6 +6,7 @@ import { summarize, type RouteSummary } from './analysis';
 import { bboxAround, bboxIntersects, pointInRing } from './geo';
 import { Graph } from './graph';
 import { findRoute } from './routing';
+import { formatClock, MODE_LABEL, TransitNetwork, type RideLeg, type TransitData } from './transit';
 import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
@@ -16,6 +17,8 @@ export type JsonLoader = <T>(path: string) => Promise<T>;
 export interface PlanResult {
   fastest: RouteSummary;
   safest: RouteSummary;
+  /** Öffi-Verbindung (zu Fuß → Öffi → zu Fuß), nur wenn sie sich lohnt */
+  transit?: RouteSummary | null;
   /** beide Routen sind gleich */
   same: boolean;
 }
@@ -24,6 +27,15 @@ export class Planner {
   readonly graph = new Graph();
   private loading = new Map<number, Promise<void>>();
   private extrasPromise: Promise<Extras | null> | null = null;
+  private transitPromise: Promise<TransitNetwork | null> | null = null;
+
+  /** Öffi-Fahrplan (transit.json); fehlt die Datei, gibt es keine Öffi-Vorschläge */
+  transitNetwork(): Promise<TransitNetwork | null> {
+    this.transitPromise ??= this.load<TransitData>('transit.json')
+      .then((d) => new TransitNetwork(d))
+      .catch(() => null);
+    return this.transitPromise;
+  }
 
   /** Zusatzdaten der Stadt Wien (Taxistände, WCs, Baustellen); fehlt die Datei, geht es ohne */
   extras(): Promise<Extras | null> {
@@ -62,7 +74,7 @@ export class Planner {
     return p;
   }
 
-  async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions & { ratings?: Rating[] } = {}): Promise<PlanResult | null> {
+  async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions & { ratings?: Rating[]; transit?: boolean } = {}): Promise<PlanResult | null> {
     await this.ensureDistricts([from, to]);
     // Bewertungen passend zu Wochentag und Uhrzeit
     const rating = opts.ratings?.length ? ratingLookup(this.graph, opts.ratings, timeFilterFor(date)) : opts.rating;
@@ -73,7 +85,77 @@ export class Planner {
     const safe = findRoute(this.graph, from, to, 'safest', ctx);
     if (!fast || !safe) return null;
     const same = fast.steps.length === safe.steps.length && fast.steps.every((s, i) => s.edge.id === safe.steps[i].edge.id);
-    return { fastest: summarize(this.graph, fast, ctx, extras), safest: summarize(this.graph, safe, ctx, extras), same };
+    const fastest = summarize(this.graph, fast, ctx, extras);
+    const safest = summarize(this.graph, safe, ctx, extras);
+    // Öffis nur vorschlagen, wenn der Fußweg nicht ganz kurz ist
+    const transit = opts.transit === false || fastest.seconds < 12 * 60 ? null : await this.planTransit(from, to, date, ctx, extras, safest.seconds);
+    return { fastest, safest, same, transit };
+  }
+
+  /** Kombinierte Route zu Fuß → Öffi → zu Fuß. Die Fußwege werden als sicherste Fußwege berechnet. */
+  private async planTransit(from: LngLat, to: LngLat, date: Date, ctx: ReturnType<typeof createContext>, extras: Extras | null, walkSeconds: number): Promise<RouteSummary | null> {
+    const net = await this.transitNetwork();
+    if (!net) return null;
+    const [opt] = net.search(from, to, date, ctx.dark, 1);
+    if (!opt) return null;
+    // lohnt sich nur, wenn es merklich schneller ist als zu Fuß
+    if (opt.totalMin * 60 > walkSeconds - 4 * 60) return null;
+    const rides = opt.legs.filter((l): l is RideLeg => l.type === 'ride');
+    const first = rides[0].from.coords;
+    const last = rides[rides.length - 1].to.coords;
+    await this.ensureDistricts([from, to, first, last], 300);
+    const walkTo = findRoute(this.graph, from, first, 'safest', ctx);
+    const walkFrom = findRoute(this.graph, last, to, 'safest', ctx);
+    const a = walkTo ? summarize(this.graph, walkTo, ctx, extras) : null;
+    const b = walkFrom ? summarize(this.graph, walkFrom, ctx, extras) : null;
+    const walks = [a, b].filter(Boolean) as RouteSummary[];
+    const walkLen = walks.reduce((s, w) => s + w.length, 0) || 1;
+    const scoreWalk = walks.reduce((s, w) => s + w.score * w.length, 0) / walkLen;
+    const darkStops = ctx.dark ? [rides[0].from, rides[rides.length - 1].to].filter((st) => !st.lit).length : 0;
+    const score = Math.max(1, Math.min(10, Math.round(scoreWalk - (ctx.dark && opt.waitMin > 10 ? 1 : 0) - darkStops * 0.5)));
+    const lineText = rides.map((r) => r.line).join(' → ');
+    const reasons = [
+      `${lineText}, ab ${formatClock(rides[0].departMin)}`,
+      opt.waitMin ? `${opt.waitMin} min Wartezeit` : 'ohne Wartezeit',
+      `${Math.round(walkLen / 10) * 10} m zu Fuß`,
+      ctx.dark ? (rides[0].from.lit ? 'Einstiegs-Haltestelle beleuchtet' : 'Einstiegs-Haltestelle: Beleuchtung unbekannt') : null,
+      opt.transfers ? '1 Umstieg' : null,
+      'Fahrplan, ohne Live-Verspätungen',
+    ].filter(Boolean) as string[];
+    const sumLit = (k: 'yes' | 'no' | 'unknown') => walks.reduce((s, w) => s + w.lit[k] * w.length, 0) / walkLen;
+    const sumCls = (k: 'good' | 'medium' | 'bad') => walks.reduce((s, w) => s + w.classes[k] * w.length, 0) / walkLen;
+    const instructions = [
+      ...(a ? [{ text: `Zu Fuß zur Haltestelle ${rides[0].from.name}`, length: a.length, at: from, hints: a.hints }] : []),
+      ...rides.map((r, i) => ({
+        text: `${i ? 'Umsteigen: ' : ''}${MODE_LABEL[r.mode] ?? 'Linie'} ${r.line} Richtung ${r.headsign}, ab ${formatClock(r.departMin)}${r.waitMin ? ` (${r.waitMin} min warten)` : ''}, ${r.stopCount} ${r.stopCount === 1 ? 'Station' : 'Stationen'} bis ${r.to.name}`,
+        length: 0,
+        at: r.from.coords,
+        hints: [],
+      })),
+      ...(b ? [{ text: `Zu Fuß von ${rides[rides.length - 1].to.name} zum Ziel`, length: b.length, at: last, hints: b.hints }] : []),
+    ];
+    return {
+      mode: 'transit',
+      transit: opt,
+      rides: rides.map((r) => r.path),
+      coords: [...(a?.coords ?? [from]), ...rides.flatMap((r) => r.path), ...(b?.coords ?? [to])],
+      length: walkLen,
+      seconds: Math.max(opt.totalMin * 60, (a?.seconds ?? 0) + (b?.seconds ?? 0)),
+      score,
+      reasons,
+      lit: { yes: sumLit('yes'), no: sumLit('no'), unknown: sumLit('unknown') },
+      classes: { good: sumCls('good'), medium: sumCls('medium'), bad: sumCls('bad') },
+      segments: walks.flatMap((w) => w.segments),
+      openPlaces: walks.flatMap((w) => w.openPlaces),
+      instructions,
+      hints: walks.flatMap((w) => w.hints),
+      dark: ctx.dark,
+      litSources: a?.litSources ?? { osm: 0, stadt: 0, mapillary: 0 },
+      works: walks.flatMap((w) => w.works),
+      taxi: a?.taxi ?? b?.taxi ?? null,
+      toilets: walks.flatMap((w) => w.toilets),
+      policeFromCity: walks.reduce((s, w) => s + w.policeFromCity, 0),
+    };
   }
 }
 

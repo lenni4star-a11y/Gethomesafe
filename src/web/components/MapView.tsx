@@ -5,7 +5,7 @@ import type { RouteSummary } from '../../core/analysis';
 import { along, bearing, lineLength, turnAngle } from '../../core/geo';
 import { closesAt } from '../../core/openingHours';
 import type { PlanResult } from '../../core/planner';
-import type { RouteMode } from '../../core/routing';
+import type { Selection } from '../App';
 import type { DataIndex, LngLat, Poi } from '../../core/types';
 import { PLACE_META, placeKindLabel, placeName } from '../places';
 
@@ -25,7 +25,7 @@ export interface RatingPoint {
 }
 
 export interface MapHandle {
-  showPlan(plan: PlanResult | null, selected: RouteMode, date: Date): void;
+  showPlan(plan: PlanResult | null, selected: Selection, date: Date): void;
   setPoints(start: LngLat | null, end: LngLat | null): void;
   setRatings(points: RatingPoint[]): void;
   /** Zuhause als neutrales Symbol (ohne Beschriftung), null = ausblenden */
@@ -124,6 +124,24 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
             },
           });
 
+        // Öffi-Fahrten (gestrichelt) mit Ein- und Ausstieg
+        map.addSource('route-rides', { type: 'geojson', data: empty });
+        map.addLayer({
+          id: 'route-rides',
+          type: 'line',
+          source: 'route-rides',
+          filter: ['==', ['geometry-type'], 'LineString'],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': '#7fb2ff', 'line-width': 5, 'line-dasharray': [1, 1.2] },
+        });
+        map.addLayer({
+          id: 'route-rides-stops',
+          type: 'circle',
+          source: 'route-rides',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: { 'circle-radius': 7, 'circle-color': '#15131f', 'circle-stroke-color': '#7fb2ff', 'circle-stroke-width': 3 },
+        });
+
         // Bewertungen (Phase 3)
         map.addSource('ratings', { type: 'geojson', data: empty });
         map.addLayer({
@@ -177,8 +195,17 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
     showPlan(plan, selected, date) {
       ready.current?.then(() => {
         const map = mapRef.current!;
-        const chosen = plan?.[selected];
-        const other = plan && !plan.same ? plan[selected === 'safest' ? 'fastest' : 'safest'] : null;
+        const chosen = selected === 'transit' ? (plan?.transit ?? plan?.safest) : plan?.[selected];
+        const other = plan && selected !== 'transit' && !plan.same ? plan[selected === 'safest' ? 'fastest' : 'safest'] : null;
+        (map.getSource('route-rides') as GeoJSONSource).setData({
+          type: 'FeatureCollection',
+          features: [
+            ...(chosen?.rides ?? []).map((path) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: path } })),
+            ...(chosen?.rides ?? []).flatMap((path) =>
+              [path[0], path[path.length - 1]].map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
+            ),
+          ],
+        });
         (map.getSource('route-chosen') as GeoJSONSource).setData({
           type: 'FeatureCollection',
           features: (chosen?.segments ?? []).map((s) => ({ type: 'Feature', properties: { cls: s.cls }, geometry: { type: 'LineString', coordinates: s.coords } })),

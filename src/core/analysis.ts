@@ -6,6 +6,7 @@ import type { Graph } from './graph';
 import { edgeSeconds, WALK_SPEED, type RawRoute, type RouteMode, type RouteStep } from './routing';
 import { edgeClass, edgeRisk, openPoisNear, scoreFromRisk, type SafetyClass, type SafetyContext } from './safety';
 import { simpleHoursState, type OpenState } from './openingHours';
+import type { TransitOption } from './transit';
 import { Flag, WayKind, type Edge, type Extras, type LngLat, type Poi, type PublicToilet, type Roadworks, type TaxiStand } from './types';
 
 /** Abschnitt mit gleicher Farbstufe (grün/gelb/rot) */
@@ -34,7 +35,11 @@ export interface Instruction {
 }
 
 export interface RouteSummary {
-  mode: RouteMode;
+  mode: RouteMode | 'transit';
+  /** Öffi-Fahrten (nur bei mode 'transit'), für die Karte */
+  rides?: LngLat[][];
+  /** die Öffi-Verbindung (nur bei mode 'transit') */
+  transit?: TransitOption;
   coords: LngLat[];
   length: number;
   seconds: number;
