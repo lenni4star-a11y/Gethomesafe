@@ -16,6 +16,8 @@ import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
 import { EscortView } from './components/EscortView';
 import { HomeSettings } from './components/HomeSettings';
+import { DecoyPinSettings } from './components/DecoyPinSettings';
+import { triggerSilentAlarm } from './silentAlarm';
 import { Onboarding } from './components/Onboarding';
 import { PrivacyPage } from './components/PrivacyPage';
 import { Legend } from './components/Legend';
@@ -376,10 +378,26 @@ export function App() {
           compact={escortCompact}
           onToggleCompact={() => setEscortCompact((c) => !c)}
           remaining={escortRemaining}
-          onEnd={async (didArrive) => {
+          onEnd={async (didArrive, decoy) => {
             const ids = escort.session?.contactIds ?? [];
+            const position = escort.lastPos;
             await escort.end();
-            if (didArrive) setArrived(ids);
+            // Täuschungs-PIN: sieht genauso aus wie ein normales Ende
+            if (decoy) void triggerSilentAlarm({ contacts: contacts.filter((c) => ids.includes(c.id)), position });
+            if (didArrive || decoy) setArrived(ids);
+          }}
+          onDecoy={() => {
+            const ids = escort.session?.contactIds ?? [];
+            void triggerSilentAlarm({ contacts: contacts.filter((c) => ids.includes(c.id)), position: escort.lastPos });
+          }}
+          onReroute={async () => {
+            const s = escort.session;
+            if (!planner || !s?.destCoords || !escort.lastPos) return;
+            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, ratings });
+            if (!res) return;
+            setPlan(res);
+            setSelected('safest');
+            escort.setRoute(res.safest.coords);
           }}
         />
       )}
@@ -576,6 +594,7 @@ export function App() {
             <h3>Begleitmodus</h3>
             <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
           </section>
+          <DecoyPinSettings decoyPinHash={settings.decoyPinHash} onChange={(h) => setSettings({ ...settings, decoyPinHash: h })} />
         </SettingsPanel>
       )}
 
@@ -615,9 +634,11 @@ export function App() {
           settings={settings.escort}
           onSettingsChange={(e) => setSettings({ ...settings, escort: e })}
           onClose={() => setShowEscortSetup(false)}
+          decoyPinHash={settings.decoyPinHash}
           onStart={(pin, dest, ids) => {
             setShowEscortSetup(false);
-            escort.start(settings.escort, pin, dest, ids, chosen?.coords);
+            const destCoords = end?.coords ?? (dest === 'Zuhause' ? home?.coords : undefined);
+            escort.start(settings.escort, pin, dest, ids, chosen?.coords, destCoords, settings.decoyPinHash);
             setEscortCompact(true);
           }}
         />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import { secondsLeft, secondsUntilCheck, type EscortEvent } from '../../core/escort';
 import type { EscortSession, LastPosition } from '../useEscort';
@@ -15,9 +15,15 @@ interface Props {
   geoError: string | null;
   contacts: Contact[];
   dispatch: (e: EscortEvent) => void;
-  checkPin: (pin: string) => Promise<boolean>;
+  /** 'real' = echte PIN, 'decoy' = Täuschungs-PIN, null = falsch */
+  checkPin: (pin: string) => Promise<'real' | 'decoy' | null>;
   /** nach erfolgreicher PIN: Begleitung beenden */
-  onEnd: (arrived: boolean) => void;
+  /** nach richtiger PIN: Begleitung beenden. decoy = Täuschungs-PIN (sieht normal aus, stiller Alarm) */
+  onEnd: (arrived: boolean, decoy: boolean) => void;
+  /** bewusst anderen Weg gehen: Route ab hier neu berechnen */
+  onReroute: () => void;
+  /** Täuschungs-PIN beim Fehlalarm-Abbruch */
+  onDecoy: () => void;
   onTalkCall: () => void;
   voiceMode: VoiceMode;
   awayFor: number | null;
@@ -29,7 +35,8 @@ interface Props {
 }
 
 /** Laufende Begleitung mit Eskalationsstufen */
-export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onTalkCall, voiceMode, awayFor, onClearAway, compact, onToggleCompact, remaining }: Props) {
+export function EscortView({ session, now, lastPos, geoError, contacts, dispatch, checkPin, onEnd, onReroute, onDecoy, onTalkCall, voiceMode, awayFor, onClearAway, compact, onToggleCompact, remaining }: Props) {
+  const pinKind = useRef<'real' | 'decoy' | null>(null);
   const [pinFor, setPinFor] = useState<'arrive' | 'cancel' | 'cancelAlarm' | null>(null);
   const { state } = session;
   const chosen = contacts.filter((c) => session.contactIds.includes(c.id));
@@ -41,13 +48,19 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
     <PinDialog
       title={pinFor === 'arrive' ? 'Angekommen?' : pinFor === 'cancel' ? 'Begleitung beenden' : 'Fehlalarm abbrechen'}
       text={pinFor === 'cancelAlarm' ? 'Gib deine PIN ein, um den Alarm abzubrechen. Die Begleitung läuft dann weiter.' : 'Gib deine PIN ein, um die Begleitung zu beenden.'}
-      check={checkPin}
+      check={async (p) => {
+        pinKind.current = await checkPin(p);
+        return pinKind.current !== null;
+      }}
       onClose={() => setPinFor(null)}
       onSuccess={() => {
         const f = pinFor;
+        const decoy = pinKind.current === 'decoy';
         setPinFor(null);
-        if (f === 'cancelAlarm') dispatch({ type: 'cancelAlarm', now: Date.now() });
-        else onEnd(f === 'arrive');
+        if (f === 'cancelAlarm') {
+          dispatch({ type: 'cancelAlarm', now: Date.now() });
+          if (decoy) onDecoy();
+        } else onEnd(f === 'arrive', decoy);
       }}
     />
   );
@@ -129,15 +142,43 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
     </span>
   );
 
+  const stillMin = state.settings.stillMinutes ?? 3;
   const prompt = state.phase === 'prompt' && (
     <div className="prompt flash" role="alertdialog" aria-modal="true" aria-label="Alles okay?">
       <h2>Alles okay?</h2>
+      {state.promptReason === 'offroute' && <p className="prompt-reason">Du bist von der geplanten Route abgekommen.</p>}
+      {state.promptReason === 'still' && <p className="prompt-reason">Du bist seit etwa {stillMin} Minuten an derselben Stelle.</p>}
       <p>Noch {left ?? 0} Sekunden, dann ruft dich deine Begleitung an.</p>
       <button type="button" className="btn ok big" onClick={() => dispatch({ type: 'ok', now: Date.now() })}>
         Ja, alles okay
       </button>
+      {state.promptReason === 'offroute' && session.destCoords && (
+        <button
+          type="button"
+          className="btn big"
+          onClick={() => {
+            dispatch({ type: 'ok', now: Date.now() });
+            onReroute();
+          }}
+        >
+          Ja, ich gehe bewusst anders – neuen Weg berechnen
+        </button>
+      )}
       <button type="button" className="btn danger big" onClick={() => dispatch({ type: 'help', now: Date.now() })}>
         Nein, ich brauche Hilfe
+      </button>
+    </div>
+  );
+
+  const arrival = state.askArrival && state.phase === 'active' && !pinFor && (
+    <div className="prompt arrival" role="alertdialog" aria-modal="true" aria-label="Bist du angekommen?">
+      <h2>Bist du angekommen?</h2>
+      <p>Du bist ganz in der Nähe deines Ziels. Zum Beenden brauchst du deine PIN.</p>
+      <button type="button" className="btn ok big" onClick={() => setPinFor('arrive')}>
+        Ja, angekommen (PIN)
+      </button>
+      <button type="button" className="btn big" onClick={() => dispatch({ type: 'notArrived', now: Date.now() })}>
+        Noch nicht
       </button>
     </div>
   );
@@ -161,6 +202,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
           </button>
         )}
         {prompt}
+        {arrival}
         {pinDialog}
       </section>
     );
@@ -216,6 +258,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
       </button>
 
       {prompt}
+      {arrival}
       {pinDialog}
     </section>
   );

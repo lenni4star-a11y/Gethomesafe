@@ -2414,3 +2414,23 @@ a.btn {
   width: 100%;
   min-width: 0;
 }
+
+/* ---------- Runde 4, Block 2: Begleitung sicherer */
+
+.watch-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 10px;
+}
+
+.prompt-reason {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--warn);
+  margin: 0;
+}
+
+.prompt.arrival {
+  animation: none;
+  background: rgba(21, 19, 31, 0.97);
+}

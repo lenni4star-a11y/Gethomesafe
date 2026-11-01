@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import type { EscortSettings } from '../../core/settings';
-import { canVibrate, isIOS, keepScreenOn, unlockAudio, vibrate } from '../signals';
+import { canVibrate, hashPin, isIOS, keepScreenOn, unlockAudio, vibrate } from '../signals';
 import { SoundCheck } from './SoundCheck';
 import { ContactsEditor } from './ContactsEditor';
 import { PinPad } from './PinPad';
@@ -15,6 +15,8 @@ interface Props {
   onSettingsChange: (s: EscortSettings) => void;
   onStart: (pin: string, destination: string, contactIds: string[]) => void;
   onClose: () => void;
+  /** Prüfwert der Täuschungs-PIN (die Begleitungs-PIN muss sich davon unterscheiden) */
+  decoyPinHash?: string | null;
 }
 
 export function EscortSettingsFields({ settings, onChange }: { settings: EscortSettings; onChange: (s: EscortSettings) => void }) {
@@ -61,6 +63,58 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
           ))}
         </select>
       </label>
+      <label className="check-row">
+        <input type="checkbox" checked={settings.watchRoute ?? true} onChange={(e) => onChange({ ...settings, watchRoute: e.target.checked })} />
+        <span>
+          <b>Rückfrage bei Abweichung oder langem Stehenbleiben</b>
+          <br />
+          <span className="muted">Nur wenn eine Route geplant ist bzw. der Standort verfügbar ist. An Haltestellen wird Warten nicht gezählt.</span>
+        </span>
+      </label>
+      {(settings.watchRoute ?? true) && (
+        <div className="watch-grid">
+          <label className="field">
+            <span>Abweichung ab</span>
+            <select value={settings.offRouteMeters ?? 75} onChange={(e) => onChange({ ...settings, offRouteMeters: Number(e.target.value) })}>
+              {[50, 75, 100, 150, 200].map((m) => (
+                <option key={m} value={m}>
+                  {m} m
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>länger als</span>
+            <select value={settings.offRouteSec ?? 30} onChange={(e) => onChange({ ...settings, offRouteSec: Number(e.target.value) })}>
+              {[15, 30, 60, 120].map((v) => (
+                <option key={v} value={v}>
+                  {v} Sekunden
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Stehenbleiben ab</span>
+            <select value={settings.stillMinutes ?? 3} onChange={(e) => onChange({ ...settings, stillMinutes: Number(e.target.value) })}>
+              {[2, 3, 5, 10].map((v) => (
+                <option key={v} value={v}>
+                  {v} Minuten
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>„Angekommen?“ im Umkreis</span>
+            <select value={settings.arrivalMeters ?? 50} onChange={(e) => onChange({ ...settings, arrivalMeters: Number(e.target.value) })}>
+              {[30, 50, 100].map((v) => (
+                <option key={v} value={v}>
+                  {v} m
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <label className="field">
         <span>Anrufversuche, bevor Kontakte benachrichtigt werden</span>
         <select value={settings.callAttempts} onChange={(e) => onChange({ ...settings, callAttempts: Number(e.target.value) })}>
@@ -76,7 +130,7 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
 }
 
 /** Begleitung starten: Ziel, Kontakte, Modus, PIN */
-export function EscortSetup({ destination, contacts, onContactsChange, settings, onSettingsChange, onStart, onClose }: Props) {
+export function EscortSetup({ destination, contacts, onContactsChange, settings, onSettingsChange, onStart, onClose, decoyPinHash }: Props) {
   const [dest, setDest] = useState(destination);
   const [selected, setSelected] = useState<string[]>(contacts.map((c) => c.id));
   const [pin, setPin] = useState('');
@@ -180,7 +234,11 @@ export function EscortSetup({ destination, contacts, onContactsChange, settings,
           confirmLabel={pinStep === 'first' ? 'Weiter' : 'Speichern'}
           error={pinError}
           onCancel={() => setPinStep(null)}
-          onSubmit={(p) => {
+          onSubmit={async (p) => {
+            if (pinStep === 'first' && decoyPinHash && (await hashPin(p)) === decoyPinHash) {
+              setPinError('Das ist deine Täuschungs-PIN. Bitte wähle eine andere PIN für die Begleitung.');
+              return;
+            }
             if (pinStep === 'first') {
               setFirstPin(p);
               setPinError(null);

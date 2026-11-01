@@ -12,6 +12,16 @@ export interface EscortSettings {
   responseSec: number;
   /** Wie oft der simulierte Anruf es versucht, bevor Kontakte benachrichtigt werden */
   callAttempts: number;
+  /** Rückfrage, wenn ich von der Route abkomme oder lange stehen bleibe */
+  watchRoute: boolean;
+  /** so weit (m) neben der Route … */
+  offRouteMeters: number;
+  /** … so lange (s), dann Rückfrage */
+  offRouteSec: number;
+  /** so lange (min) ohne Bewegung, dann Rückfrage (nicht an Haltestellen) */
+  stillMinutes: number;
+  /** in diesem Umkreis (m) ums Ziel fragt die App „Bist du angekommen?“ */
+  arrivalMeters: number;
 }
 
 export interface Settings {
@@ -23,6 +33,8 @@ export interface Settings {
   voice: 'auto' | 'device' | 'recording';
   /** Zuhause auf der Karte als neutrales Symbol zeigen */
   showHomeOnMap: boolean;
+  /** Prüfwert der Täuschungs-PIN (nie im Klartext), null = keine */
+  decoyPinHash: string | null;
   escort: EscortSettings;
 }
 
@@ -31,7 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mapillaryToken: '',
   voice: 'auto',
   showHomeOnMap: true,
-  escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1 },
+  decoyPinHash: null,
+  escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1, watchRoute: true, offRouteMeters: 75, offRouteSec: 30, stillMinutes: 3, arrivalMeters: 50 },
 };
 
 export function withDefaults(s: Partial<Settings> | undefined): Settings {

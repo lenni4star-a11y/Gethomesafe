@@ -3,8 +3,13 @@
 //
 // Ablauf: aktiv → Rückfrage („Alles okay?“) → simulierter Anruf → Kontakte benachrichtigen → Notruf-Bildschirm.
 // Es gibt keine automatische Alarmierung der Polizei.
+//
+// Zusätzlich (wenn eingeschaltet): Rückfrage, wenn man deutlich von der Route abkommt oder lange stehen bleibt,
+// und die Frage „Bist du angekommen?“ in der Nähe des Ziels. Beendet wird immer nur mit PIN.
 
+import { distance } from './geo';
 import type { EscortSettings } from './settings';
+import type { LngLat } from './types';
 
 export type EscortPhase = 'active' | 'prompt' | 'call' | 'contact' | 'emergency';
 
@@ -22,6 +27,25 @@ export interface EscortState {
   callAttempt: number;
   /** warum Kontakte benachrichtigt werden sollen */
   reason: 'no_answer' | 'not_ok' | null;
+  /** warum gerade nachgefragt wird */
+  promptReason: PromptReason | null;
+  /** Überwachung von Position und Route */
+  watch: WatchState;
+  /** Ziel in Reichweite: App fragt „Bist du angekommen?“ (nur einmal, bis man sich wieder entfernt) */
+  askArrival: boolean;
+}
+
+export type PromptReason = 'check' | 'offroute' | 'still';
+
+export interface WatchState {
+  /** seit wann neben der Route */
+  offRouteSince: number | null;
+  /** Abweichung bestätigt („alles okay, ich gehe bewusst anders“): keine neue Rückfrage, bis man wieder auf der Route ist */
+  offRouteAcknowledged: boolean;
+  /** Ort und Zeitpunkt, seit dem man sich kaum bewegt */
+  stillAnchor: LngLat | null;
+  stillSince: number | null;
+  arrivalAsked: boolean;
 }
 
 export type EscortEvent =
@@ -34,17 +58,88 @@ export type EscortEvent =
   | { type: 'help'; now: number }
   | { type: 'emergency'; now: number }
   /** Fehlalarm, nach PIN-Eingabe */
-  | { type: 'cancelAlarm'; now: number };
+  | { type: 'cancelAlarm'; now: number }
+  /**
+   * Neue Position. Die Oberfläche berechnet vorher, wie weit sie neben der Route liegt,
+   * wie viel Weg noch bleibt und ob gerade eine Haltestelle in der Nähe ist.
+   */
+  | { type: 'position'; now: number; coords: LngLat; offRoute: number | null; remaining: number | null; atStop: boolean }
+  /** Route wurde neu berechnet (bewusst anderer Weg) */
+  | { type: 'rerouted'; now: number }
+  /** „Noch nicht angekommen“ */
+  | { type: 'notArrived'; now: number };
+
+/** Ab so viel Bewegung (m) gilt man nicht mehr als „stehend“ */
+export const STILL_RADIUS = 25;
 
 /** Wie lange der simulierte Anruf klingelt, bevor er als „keine Antwort“ gilt */
 export const callDuration = (s: EscortSettings) => Math.max(30, s.responseSec * 1.5) * 1000;
 
 export function startEscort(settings: EscortSettings, now: number): EscortState {
-  return { phase: 'active', settings, startedAt: now, lastOk: now, holding: false, deadline: null, callAttempt: 0, reason: null };
+  return {
+    phase: 'active',
+    settings,
+    startedAt: now,
+    lastOk: now,
+    holding: false,
+    deadline: null,
+    callAttempt: 0,
+    reason: null,
+    promptReason: null,
+    watch: { offRouteSince: null, offRouteAcknowledged: false, stillAnchor: null, stillSince: null, arrivalAsked: false },
+    askArrival: false,
+  };
 }
 
-function toPrompt(s: EscortState, now: number): EscortState {
-  return { ...s, phase: 'prompt', deadline: now + s.settings.responseSec * 1000 };
+function toPrompt(s: EscortState, now: number, reason: PromptReason = 'check'): EscortState {
+  return { ...s, phase: 'prompt', promptReason: reason, deadline: now + s.settings.responseSec * 1000 };
+}
+
+/** Positions-Überwachung: Abweichung, Stillstand, Ankunft */
+function onPosition(s: EscortState, e: Extract<EscortEvent, { type: 'position' }>): EscortState {
+  const cfg = s.settings;
+  // ältere gespeicherte Begleitungen haben noch keine Überwachung
+  const w: WatchState = { ...(s.watch ?? { offRouteSince: null, offRouteAcknowledged: false, stillAnchor: null, stillSince: null, arrivalAsked: false }) };
+  let next: EscortState = { ...s, watch: w };
+
+  // Ankunft: in der Nähe des Ziels einmal fragen (gilt auch ohne Routen-Überwachung)
+  if (e.remaining !== null) {
+    const near = e.remaining <= (cfg.arrivalMeters ?? 50);
+    if (near && !w.arrivalAsked && s.phase === 'active') {
+      w.arrivalAsked = true;
+      next.askArrival = true;
+    } else if (!near && e.remaining > (cfg.arrivalMeters ?? 50) * 3) {
+      w.arrivalAsked = false;
+      next.askArrival = false;
+    }
+  }
+
+  if (!cfg.watchRoute) return next;
+
+  // Stillstand
+  if (!w.stillAnchor || distance(w.stillAnchor, e.coords) > STILL_RADIUS) {
+    w.stillAnchor = e.coords;
+    w.stillSince = e.now;
+  }
+
+  // Abweichung von der Route
+  const off = e.offRoute !== null && e.offRoute > cfg.offRouteMeters;
+  if (!off) {
+    w.offRouteSince = null;
+    w.offRouteAcknowledged = false;
+  } else if (w.offRouteSince === null) w.offRouteSince = e.now;
+
+  if (s.phase !== 'active' || next.askArrival) return next;
+
+  if (off && !w.offRouteAcknowledged && w.offRouteSince !== null && e.now - w.offRouteSince >= cfg.offRouteSec * 1000) {
+    w.offRouteAcknowledged = true;
+    return toPrompt(next, e.now, 'offroute');
+  }
+  if (!e.atStop && w.stillSince !== null && e.now - w.stillSince >= cfg.stillMinutes * 60000) {
+    w.stillSince = e.now; // nach der Rückfrage wieder von vorn zählen
+    return toPrompt(next, e.now, 'still');
+  }
+  return next;
 }
 
 function toCall(s: EscortState, now: number): EscortState {
@@ -52,7 +147,7 @@ function toCall(s: EscortState, now: number): EscortState {
 }
 
 function toActive(s: EscortState, now: number): EscortState {
-  return { ...s, phase: 'active', lastOk: now, deadline: null, callAttempt: 0, reason: null };
+  return { ...s, phase: 'active', lastOk: now, deadline: null, callAttempt: 0, reason: null, promptReason: null };
 }
 
 /** Sekunden bis zur nächsten Rückfrage (nur Modus „regelmäßig bestätigen“) */
@@ -102,5 +197,18 @@ export function escortReducer(s: EscortState, e: EscortEvent): EscortState {
       return { ...s, phase: 'emergency', deadline: null };
     case 'cancelAlarm':
       return { ...toActive(s, e.now), holding: false };
+    case 'position':
+      return onPosition(s, e);
+    case 'rerouted':
+      return { ...s, watch: { ...s.watch, offRouteSince: null, offRouteAcknowledged: false } };
+    case 'notArrived':
+      return { ...s, askArrival: false };
   }
+}
+
+/** Welche PIN wurde beim Beenden eingegeben? Täuschungs-PIN beendet sichtbar normal, löst aber den stillen Alarm aus. */
+export function classifyPin(enteredHash: string, realHash: string, decoyHash: string | null | undefined): 'real' | 'decoy' | null {
+  if (enteredHash === realHash) return 'real';
+  if (decoyHash && enteredHash === decoyHash) return 'decoy';
+  return null;
 }
