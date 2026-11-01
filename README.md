@@ -3,7 +3,7 @@
 Prototyp einer Web-App (PWA), die FLINTA* und andere marginalisierte Menschen abends und nachts sicherer nach Hause bringt.
 Pilotgebiet: Wiener Bezirke mit vielen Studierenden.
 
-**Stand: Phasen 1–3 (Route, Notfall-Menü und Begleitmodus, Bewertungen).** Alle Anforderungen und Regeln stehen in [CLAUDE.md](CLAUDE.md).
+**Stand: Phasen 1–3 plus Einführung, Datenschutz-Seite, sichererer Begleitmodus und Zusatzdaten (Stadt Wien, Mapillary-Laternen).** Alle Anforderungen und Regeln stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Was die App gerade kann
 
@@ -34,7 +34,8 @@ Kriminalitätsdaten werden bewusst nicht verwendet.
 ## Datenquellen
 
 - **OpenStreetMap** (© OpenStreetMap-Mitwirkende, ODbL): Wegenetz, Beleuchtung, Orte mit Öffnungszeiten. Export für Wien von [BBBike](https://download.bbbike.org/osm/bbbike/Wien/), wöchentlich aktualisiert
-- **Stadt Wien, data.wien.gv.at** (CC BY 4.0): Bezirksgrenzen, rund 173.000 Leuchtenstandorte (Datensatz „Lampentausch“), Haltestellen
+- **Stadt Wien, data.wien.gv.at** (CC BY 4.0): Bezirksgrenzen, rund 173.000 Leuchtenstandorte (Datensatz „Lampentausch“), Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, verkehrswirksame Baustellen
+- **Mapillary** (© Mapillary-Mitwirkende, CC BY-SA 4.0): Straßenfotos und auf Fotos erkannte Straßenlaternen
 - **Kartenbild:** [OpenFreeMap](https://openfreemap.org) (frei, ohne Account)
 - **Adresssuche:** [Photon](https://photon.komoot.io) von komoot (frei, faire Nutzung)
 - **Straßenfotos:** Link zu [Mapillary](https://www.mapillary.com)
@@ -91,6 +92,11 @@ Einmalige Einrichtung (Repo muss öffentlich sein, sonst braucht GitHub Pages ei
 1. Kostenlosen „Client Token“ erstellen: https://www.mapillary.com/dashboard/developers
 2. **Lokal:** `.env.example` zu `.env` kopieren und den Token bei `VITE_MAPILLARY_TOKEN=` eintragen. `.env` wird nie hochgeladen.
 3. **Online (für alle Nutzer·innen):** GitHub → Repo → Settings → Secrets and variables → Actions → „New repository secret“, Name `MAPILLARY_TOKEN`, Wert = Token. Danach unter Actions „App veröffentlichen“ neu starten.
+
+## Kartendaten aktualisieren
+
+- **Online (empfohlen):** GitHub → Actions → „Kartendaten aktualisieren“ → Run workflow. Baut OSM, Stadt-Wien-Daten und die auf Mapillary-Fotos erkannten Laternen neu (nutzt das Secret `MAPILLARY_TOKEN`), lädt sie hoch und veröffentlicht die App neu.
+- **Lokal:** `npm run data` (Token aus `.env`).
 
 ## Befehle
 

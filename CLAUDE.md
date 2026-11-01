@@ -26,7 +26,11 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 
 ## Datenquellen und Grundsätze
 - **OpenStreetMap:** Wegenetz, `lit`, Orte mit `opening_hours` (Polizei, Tankstellen, Spätis, Bars, Lokale, Apotheken, Hotels …).
-- **Stadt Wien (data.wien.gv.at, CC BY 4.0):** Bezirksgrenzen, ca. 173.000 Leuchtenstandorte (Datensatz „Lampentausch“), Öffi-Haltestellen.
+- **Stadt Wien (data.wien.gv.at, CC BY 4.0):** Bezirksgrenzen, ca. 173.000 Leuchtenstandorte (Datensatz „Lampentausch“), Öffi-Haltestellen, **Polizei** (POLIZEIOGD, als sichere Orte, mit OSM zusammengeführt), **Taxistandplätze** (TAXIOGD, „Taxistand direkt am Weg“), **öffentliche WCs** (WCANLAGE2OGD, mit Öffnungszeiten), **verkehrswirksame Baustellen** (BAUSTELLENLINOGD/-PKTOGD, mit Beginn/Ende; nur aktive Baustellen werten leicht ab). Zusatzdaten in `public/data/extras.json`.
+- **Mapillary-Kartenobjekte:** auf Fotos erkannte Straßenlaternen (`object--street-light`, Vektor-Kacheln `mly_map_feature_point`, Zoom 14) füllen Lücken bei unbekannter Beleuchtung; Gewicht niedriger als OSM-`lit` und Stadt-Wien-Leuchten (`lightRisk` 0,15 statt 0). Namensnennung © Mapillary-Mitwirkende (CC BY-SA 4.0). Token beim Datenbau aus `MAPILLARY_TOKEN` (Umgebung/GitHub-Secret) oder `.env`. Stand Nov. 2026: füllt ca. 4 % der Wegstrecke (unbekannt sinkt von 16,8 % auf 12,8 %).
+- **Begründung zeigt die Quelle** („Beleuchtung: 97 % laut OpenStreetMap …“, „laut Stadt Wien“, „auf Mapillary-Fotos erkannt“), Details-Abschnitt „Woher die Einschätzung kommt“.
+- **Nicht verwendet:** NASA Black Marble (VIIRS) – braucht NASA-Earthdata-Account und hat ca. 500 m Auflösung, in Wien überall „hell“, sagt über einzelne Gassen nichts. Baustellen: die Stadt veröffentlicht nur verkehrswirksame Baustellen.
+- **Kartendaten aktualisieren:** GitHub → Actions → „Kartendaten aktualisieren“ (`.github/workflows/update-data.yml`, manuell) baut alles neu, lädt hoch und stößt die Veröffentlichung an.
 - **Öffi-Stationen** zählen als „offene Orte“ mit ungefähren Betriebszeiten der Wiener Linien (U-Bahn am Wochenende durchgehend, Nachtlinien 0:30–5:00).
 - **Keine Kriminalitätsdaten** (nicht kleinräumig verfügbar, Stigmatisierungsgefahr).
 - **Keine Orte als „Drogen-Hotspot“ markieren, keine Kategorien über Personengruppen** – weder in Daten noch in Bewertungsgründen oder Texten. Bewertungen beschreiben nur Ort und Situation.
@@ -76,20 +80,40 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - Vibration (Android): wird im Tipp beim Start angestoßen, Testknopf meldet, ob der Browser sie angenommen hat. **iPhone: keine Vibration für Web-Apps** – Ersatz: lauter Ton, rot blinkender Bildschirm, großes Overlay, einmalige Erklärung beim Start.
 - **PIN-Eingabe wie eine Handy-Sperre** (`PinPad`): Punkte oben mittig, Ziffernblock 3×4 zentriert, „Bestätigen“ unten über die ganze Breite, große Tasten, auch auf kleinen Bildschirmen und im Querformat; auch zum Festlegen der PIN.
 
+### Einführung und Datenschutz
+- Einführung beim ersten Start (4 Schritte, überspringbar, in den Einstellungen erneut aufrufbar): was die App kann, was sie nicht kann (kein Notruf-Ersatz, gesperrter Bildschirm, iPhone ohne Vibration, Prototyp), Zuhause und Kontakte, Testton.
+- Datenschutz-Seite in einfacher Sprache (`PrivacyPage`): was wo gespeichert wird, wann der Standort genutzt wird, aufgerufene Dienste (GitHub Pages, OpenFreeMap, Photon/komoot, Mapillary/Meta, Spracherkennung in Chrome → Google), was an Kontakte geht, wie man löscht. **Bei jedem neuen Dienst aktualisieren.**
+- „Alle meine Daten löschen“ (IndexedDB + local/sessionStorage); nicht während einer laufenden Begleitung (sonst Beenden ohne PIN möglich).
+
+### Begleitmodus: Abweichung, Ankunft, Täuschungs-PIN
+- Rückfrage „Alles okay?“ bei Abweichung von der Route (Standard >75 m für >30 s) oder Stillstand (Standard 3 min, nicht im Umkreis von 40 m um Haltestellen); Schwellen einstellbar, abschaltbar. Nach „alles okay“ keine neue Abweichungs-Rückfrage, bis man wieder auf der Route ist. „Bewusst anders – neuen Weg berechnen“ berechnet ab der letzten Position neu.
+- „Bist du angekommen?“ im Umkreis (Standard 50 m) ums Ziel; Beenden nur mit PIN, nie automatisch.
+- **Täuschungs-PIN** (Einstellungen, nur als Hash): beendet sichtbar normal. Stiller Alarm an Kontakte braucht einen Server – im Prototyp **nicht verfügbar** und in der App deutlich so gekennzeichnet (`src/web/silentAlarm.ts` ist der Platzhalter). Begleitungs-PIN darf nicht gleich der Täuschungs-PIN sein.
+- Alles in `src/core/escort.ts` (Ereignisse `position`, `rerouted`, `notArrived`; `classifyPin`) mit Tests.
+
 ### Bewertungen
 - Wegstücke, Orte und Haltestellen bewerten: Sicherheitsgefühl 1–5, Wochentag und Uhrzeit automatisch (änderbar), Gründe zur Auswahl (dunkel, menschenleer, belebt, gut einsehbar, unangenehme Situation/bedrängt, Belästigung erlebt), optionale Notiz (sanfter Hinweis, wenn Personengruppen beschrieben werden).
 - Bewertungen fließen in Farben und sicherste Route ein, gefiltert nach Wochentag und Uhrzeit (±2 h, ähnliche Tage; Nächte zählen zum Vortag).
 - Kartenebene filterbar: gewählte Zeit / alle Zeiten / aus. Eigene Bewertungen ansehen und löschen.
 - Struktur (`src/core/ratings.ts`) mit stabilen Schlüsseln (OSM-Knoten-IDs), Version und ohne Personendaten, vorbereitet für einen späteren Server.
 
-## Phase 4 (noch offen): Feinschliff
-- Installierbar als PWA (Manifest, Service Worker, Offline-Daten), Dunkelmodus ist schon Standard.
-- Barrierearm prüfen (Kontraste, Schriftgrößen, Screenreader).
-- Kurze Einführung beim ersten Start.
-- Datenschutz-Seite in einfacher Sprache.
+## Offen / wartet auf Entscheidung
+- **Öffis im Routing (Block 4, Punkt 12):** Echtzeit-API der Wiener Linien (`ogd_realtime/monitor`) funktioniert, sendet aber **keine CORS-Freigabe** → aus dem Browser nur über einen kleinen Proxy. Fahrplan als GTFS (`ogd_realtime/doku/ogd/gtfs/gtfs.zip`, ca. 96 MB) ist frei verfügbar und könnte ohne Server vorverarbeitet werden (ohne Verspätungen). Entscheidung der Projektinhaber·in ausstehend.
+- **Live-Standort-Link (Punkt 13), stiller Alarm (Täuschungs-PIN), gemeinsame Bewertungen (Block 5):** brauchen einen Server. Optionen (z. B. Supabase EU, Cloudflare Workers mit EU-Speicher, eigener kleiner Server in der EU) wurden vorgeschlagen; vor jeder Umsetzung fragen. Für den stillen Alarm per SMS bräuchte es zusätzlich einen SMS-Anbieter (Kosten).
+- **Gemeinsame Bewertungen vorbereitet** (`src/core/sharedRatings.ts`, getestet): erst ab 3 verschiedenen Geräten wirksam, Halbwertszeit 180 Tage, nach 730 Tagen verfallen, pro Gerät und Wegstück nur die neueste, max. 20 pro Gerät und Tag, Notizen und freie Orte werden nie geteilt. Teilen wäre Opt-in, standardmäßig bleibt alles lokal.
+- **Phase 4 Rest:** installierbar als PWA (Manifest, Service Worker, Offline-Daten), Barrierefreiheit prüfen (Kontraste, Schriftgrößen, Screenreader).
+
+## Konzept (nicht umsetzen ohne Zustimmung): KI-Einschätzung aus Straßenfotos
+**Idee:** Aus Mapillary-Fotos (bevorzugt Nachtfotos) ein grobes Maß ableiten, wie sicher sich eine Straße *anfühlen könnte* – ähnlich Projekten wie „Safest Way“ oder Forschung am UCL (Wahrnehmung von Straßenräumen aus Bildern).
+- **Was erkannt würde – nur Ort und Umgebung, nie Menschen:** Helligkeit/Lichtkegel im Nachtfoto, Anzahl sichtbarer Leuchten, Sichtachsen und Einsehbarkeit, Breite des Gehwegs, Bewuchs/Ecken mit Sichtschutz, beleuchtete Schaufenster/Eingänge, Unterführungen. Personen, Gesichter, Kleidung, Gruppen werden **nicht** ausgewertet (Mapillary verpixelt Gesichter ohnehin); keine Kategorien über Personengruppen.
+- **Wie:** offene Bild-Segmentierung (z. B. vortrainiertes Modell für Straßenszenen) einmalig im Daten-Skript über die Fotos des Pilotgebiets; Ergebnis je Wegstück als Zahl 0–1 mit Fotoanzahl und Aufnahmedatum. Kein Senden von Fotos an Dritte zur Laufzeit.
+- **Gewichtung:** sehr niedrig (z. B. höchstens 10 % des Risikos), nur wo es genug aktuelle Fotos gibt, nie stärker als Beleuchtungsdaten oder echte Bewertungen; in der Begründung klar als „grobe Schätzung aus Fotos“ gekennzeichnet, abschaltbar.
+- **Risiken:** Vorurteile im Modell (z. B. „ärmer aussehende“ Straßen schlechter bewertet), **Stigmatisierung von Grätzln**, veraltete Fotos, Tagfotos sagen wenig über die Nacht, Scheingenauigkeit. Gegenmaßnahmen: keine Personenmerkmale, keine Bezirks-/Grätzl-Ranglisten, keine Karte „unsichere Gegenden“, nur Wegstück-bezogen und relativ; Prüfung der Ergebnisse mit Betroffenen und Fachleuten; Transparenzseite.
+- **Kosten:** Rechenzeit einmalig (lokal oder günstige Cloud-GPU, grob einige Euro bis wenige zehn Euro für das Pilotgebiet), Mapillary-Abfragen im Rahmen der freien Nutzung; laufend nur bei Daten-Updates.
+- **Entscheidung:** erst nach ausdrücklicher Zustimmung der Projektinhaber·in umsetzen.
 
 ## Später (jetzt nicht umsetzen)
-- **Native App:** Standort und Begleitung im Hintergrund bzw. bei gesperrtem Bildschirm, echte Benachrichtigungen, **Vibration auch auf dem iPhone**, Klingelton/Alarm unabhängig vom Lautlos-Schalter, automatischer SMS-Versand an Kontakte (mit Zustimmung).
+- **Native App:** Standort und Begleitung im Hintergrund bzw. bei gesperrtem Bildschirm, echte Benachrichtigungen, **Vibration auch auf dem iPhone**, Klingelton/Alarm unabhängig vom Lautlos-Schalter, automatischer SMS-Versand an Kontakte (mit Zustimmung), stiller Alarm bei Täuschungs-PIN.
 - Echter KI-Anruf mit Sprachdialog (auch als echter Telefonanruf).
 - Polizei als letzte Eskalationsstufe nur über offiziellen Weg (Leitstelle oder offizieller stiller Notruf), nie automatischer KI-Anruf bei 133.
 - Gemeinsame Bewertungen über einen Server, mit Moderation.
@@ -98,5 +122,5 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 ## Befehle
 - `npm run dev` / `npm run dev:https` – Entwicklung
 - `npm run data` – Kartendaten neu bauen (`-- --refresh` lädt Rohdaten neu)
-- `npm test` – Tests (Routing, Farbstufen, Parks, Begleit-Eskalation, Bewertungen)
+- `npm test` – Tests (Routing, Farbstufen, Parks, Begleit-Eskalation inkl. Abweichung/Ankunft/Täuschungs-PIN, Bewertungen, gemeinsame Bewertungen, Zusatzdaten)
 - `npm run build` – fertige Version in `dist/`
