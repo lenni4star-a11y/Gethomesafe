@@ -391,6 +391,11 @@ input {
   font-size: 0.82rem;
 }
 
+.route-card.unavailable {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .route-card.selected {
   border-color: var(--accent);
   background: #322c55;

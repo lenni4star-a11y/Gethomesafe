@@ -88,7 +88,8 @@ export class Planner {
     const fastest = summarize(this.graph, fast, ctx, extras);
     const safest = summarize(this.graph, safe, ctx, extras);
     // Öffis nur vorschlagen, wenn der Fußweg nicht ganz kurz ist
-    const transit = opts.transit === false || fastest.seconds < 12 * 60 ? null : await this.planTransit(from, to, date, ctx, extras, safest.seconds);
+    // Öffis immer anbieten (wie in Karten-Apps), außer bei ganz kurzen Wegen
+    const transit = opts.transit === false || fastest.seconds < 5 * 60 ? null : await this.planTransit(from, to, date, ctx, extras, safest.seconds);
     return { fastest, safest, same, transit };
   }
 
@@ -98,8 +99,8 @@ export class Planner {
     if (!net) return null;
     const [opt] = net.search(from, to, date, ctx.dark, 1);
     if (!opt) return null;
-    // lohnt sich nur, wenn es merklich schneller ist als zu Fuß
-    if (opt.totalMin * 60 > walkSeconds - 4 * 60) return null;
+    // Auch anzeigen, wenn es nicht schneller ist: Die Wahl trifft die Person (z. B. weniger Fußweg in der Nacht).
+    const notFaster = opt.totalMin * 60 > walkSeconds - 4 * 60;
     const rides = opt.legs.filter((l): l is RideLeg => l.type === 'ride');
     const first = rides[0].from.coords;
     const last = rides[rides.length - 1].to.coords;
@@ -120,6 +121,7 @@ export class Planner {
       `${Math.round(walkLen / 10) * 10} m zu Fuß`,
       ctx.dark ? (rides[0].from.lit ? 'Einstiegs-Haltestelle beleuchtet' : 'Einstiegs-Haltestelle: Beleuchtung unbekannt') : null,
       opt.transfers ? '1 Umstieg' : null,
+      notFaster ? 'zu Fuß etwa gleich schnell oder schneller' : null,
       'Fahrplan, ohne Live-Verspätungen',
     ].filter(Boolean) as string[];
     const sumLit = (k: 'yes' | 'no' | 'unknown') => walks.reduce((s, w) => s + w.lit[k] * w.length, 0) / walkLen;
