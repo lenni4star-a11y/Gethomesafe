@@ -9,6 +9,8 @@ interface Props {
   /** Sekunden bis „keine Antwort“ (nur check) */
   secondsLeft?: number | null;
   onAnswer?: (ok: boolean) => void;
+  /** Anruf angenommen (nur check): Antwortzeit neu starten */
+  onAccept?: () => void;
   onHangup: () => void;
 }
 
@@ -30,13 +32,14 @@ const CHECK_SCRIPT: Line[] = [
 ];
 
 /** Simulierter Anruf mit Klingelton, Stimme und Untertiteln */
-export function CallScreen({ kind, caller, voiceMode = 'auto', secondsLeft, onAnswer, onHangup }: Props) {
+export function CallScreen({ kind, caller, voiceMode = 'auto', secondsLeft, onAnswer, onAccept, onHangup }: Props) {
   const [accepted, setAccepted] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [subtitle, setSubtitle] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [silent, setSilent] = useState(false);
   const stopRing = useRef<() => void>();
+  const stopListen = useRef<() => void>();
   const active = useRef(true);
 
   useEffect(() => {
@@ -45,6 +48,7 @@ export function CallScreen({ kind, caller, voiceMode = 'auto', secondsLeft, onAn
     return () => {
       active.current = false;
       stopRing.current?.();
+      stopListen.current?.(); // Mikrofon nicht weiterlaufen lassen, wenn der Anruf-Bildschirm schließt
       stopSpeaking();
     };
   }, []);
@@ -64,6 +68,7 @@ export function CallScreen({ kind, caller, voiceMode = 'auto', secondsLeft, onAn
   const accept = async () => {
     stopRing.current?.();
     setAccepted(true);
+    onAccept?.();
     const script = kind === 'fake' ? FAKE_SCRIPT : CHECK_SCRIPT;
     for (const l of script) {
       if (!active.current) return;
@@ -72,7 +77,11 @@ export function CallScreen({ kind, caller, voiceMode = 'auto', secondsLeft, onAn
     }
     if (kind !== 'check' || !active.current || !canListen()) return;
     setListening(true);
-    const ok = await listenForAnswer().result;
+    onAccept?.(); // Zuhören beginnt: Antwortzeit noch einmal neu starten
+    const listen = listenForAnswer();
+    stopListen.current = listen.stop;
+    const ok = await listen.result;
+    stopListen.current = undefined;
     setListening(false);
     if (!active.current || ok === null) return;
     await speakLine(ok ? { text: 'Schön. Ich begleite dich weiter.', clip: 'check-weiter', pause: 0 } : { text: 'Okay. Ich helfe dir jetzt, jemanden zu benachrichtigen.', clip: 'check-hilfe', pause: 0 });

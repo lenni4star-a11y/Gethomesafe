@@ -7,6 +7,8 @@
 //   Tipp aufgerufen werden (z. B. „Begleitung starten“). Danach dürfen die Elemente später von selbst abspielen.
 // - Sprachausgabe: deutsche Gerätestimme (de-AT, sonst de-DE), sonst vorab aufgenommene Dateien.
 
+import { classifyAnswer } from '../core/escort';
+
 const BASE = `${import.meta.env.BASE_URL}audio/`;
 
 export type Sound = 'ringtone' | 'siren' | 'testton';
@@ -290,9 +292,7 @@ export function listenForAnswer(): { result: Promise<boolean | null>; stop: () =
         .join(' ')
         .toLowerCase();
       done = true;
-      if (/nicht gut|schlecht|hilfe|nein|angst|nicht okay|nicht ok/.test(text)) resolve(false);
-      else if (/gut|okay|ok|passt|alles klar|ja/.test(text)) resolve(true);
-      else resolve(null);
+      resolve(classifyAnswer(text));
     };
     rec.onend = () => !done && resolve(null);
     rec.onerror = () => resolve(null);
@@ -332,5 +332,18 @@ export async function hashPin(pin: string): Promise<string> {
     const buf = await crypto.subtle.digest('SHA-256', data);
     return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
   }
-  return btoa(String.fromCharCode(...data));
+  // Ohne https gibt es crypto.subtle nicht. Früher stand hier btoa(), das ließ sich direkt zurückrechnen.
+  // Jetzt: einfacher Einweg-Hash (FNV-1a, mehrfach), damit die PIN nicht im Klartext lesbar ist.
+  // Hinweis: Der Präfix „gethomesafe:“ bleibt auch bei neuem App-Namen, sonst passen gespeicherte PINs nicht mehr.
+  let h = 0x811c9dc5;
+  let out = '';
+  for (let round = 0; round < 8; round++) {
+    for (const b of data) {
+      h ^= b;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    h ^= round;
+    out += h.toString(16).padStart(8, '0');
+  }
+  return 'fnv:' + out;
 }
