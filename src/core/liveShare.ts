@@ -81,5 +81,5 @@ export function formatAge(ms: number): string {
 
 /** Nachricht an Kontakte mit dem Link (Absenden immer selbst) */
 export function liveMessage(link: string): string {
-  return `Ich bin auf dem Heimweg und teile meinen Standort live mit dir, bis ich angekommen bin: ${link} (Gethomesafe, der Link funktioniert nur während meiner Begleitung)`;
+  return `Ich bin auf dem Heimweg und teile meinen Standort live mit dir, bis ich angekommen bin: ${link} (Goodway, der Link funktioniert nur während meiner Begleitung)`;
 }

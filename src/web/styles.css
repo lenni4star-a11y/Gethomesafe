@@ -80,7 +80,36 @@ input {
 
 .brand {
   font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+/* Der Punkt in der Wortmarke: das Licht der Straßenlaterne */
+.brand-dot {
+  color: var(--accent);
+}
+
+/* Linien-Symbole (Icon.tsx) sitzen mittig neben Text */
+.icon {
+  display: inline-block;
+  vertical-align: -0.2em;
+  flex-shrink: 0;
+}
+
+.settings-btn,
+.ratings-btn,
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.ob-claim {
+  margin-top: -4px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .badge {
@@ -1269,7 +1298,7 @@ input {
   flex-direction: column;
   justify-content: space-between;
   padding: calc(env(safe-area-inset-top) + 60px) 24px calc(env(safe-area-inset-bottom) + 40px);
-  background: linear-gradient(180deg, #2b2450, #15131f 70%);
+  background: var(--bg);
 }
 
 .call-top {

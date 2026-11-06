@@ -110,7 +110,7 @@ export function LiveViewer({ id, keyB64 }: { id: string; keyB64: string }) {
           </>
         )}
         <p className="fineprint">
-          Geteilt mit Gethomesafe während einer Heimweg-Begleitung. Nur der aktuelle Standort, verschlüsselt. Dies ist <b>kein Notruf</b>: Bei Gefahr ruf die Polizei.
+          Geteilt mit Goodway während einer Heimweg-Begleitung. Nur der aktuelle Standort, verschlüsselt. Dies ist <b>kein Notruf</b>: Bei Gefahr ruf die Polizei.
         </p>
         <div className="tp-row">
           <a className="btn danger small" href="tel:133">

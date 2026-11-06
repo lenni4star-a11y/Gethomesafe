@@ -26,7 +26,7 @@ const FAKE_SCRIPT: Line[] = [
 ];
 
 const CHECK_SCRIPT: Line[] = [
-  { text: 'Hallo, hier ist deine Begleitung von Gethomesafe.', clip: 'check-hallo', pause: 300 },
+  { text: 'Hallo, hier ist deine Begleitung von Goodway.', clip: 'check-hallo', pause: 300 },
   { text: 'Ist alles okay bei dir?', clip: 'check-okay', pause: 300 },
   { text: 'Wie fühlst du dich gerade? Sag einfach „gut“ oder „nicht gut“. Oder tipp auf einen Knopf.', clip: 'check-gefuehl', pause: 0 },
 ];
