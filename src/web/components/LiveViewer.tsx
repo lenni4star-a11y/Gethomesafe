@@ -3,8 +3,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import { formatAge, LIVE_RULES, type LivePayload } from '../../core/liveShare';
 import { fetchLive, LIVE_AVAILABLE } from '../liveShare';
+import { mapStyleUrl } from '../mapStyle';
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+const STYLE_URL = mapStyleUrl();
 
 type State = { kind: 'loading' } | { kind: 'waiting' } | { kind: 'live'; payload: LivePayload; updatedAt: number } | { kind: 'ended' } | { kind: 'error'; text: string };
 

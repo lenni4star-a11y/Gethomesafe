@@ -8,9 +8,10 @@ import type { PlanResult } from '../../core/planner';
 import type { Selection } from '../App';
 import type { DataIndex, LngLat, Poi } from '../../core/types';
 import { PLACE_META, placeKindLabel, placeName } from '../places';
+import { mapStyleUrl } from '../mapStyle';
 
 // Freier Kartenstil von OpenFreeMap (kein Account, keine Nutzungsgrenze für faire Nutzung)
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+const STYLE_URL = mapStyleUrl();
 
 /** Farbstufen: grün = gut, gelb = mäßig / keine Daten, rot = schlecht */
 export const CLASS_COLORS = { good: '#4fd18b', medium: '#ffd166', bad: '#ff5c7a' };

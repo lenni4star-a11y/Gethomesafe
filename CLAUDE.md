@@ -20,7 +20,8 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Geheimnisse nie ins Repo:** Mapillary-Token nur in `.env` (lokal, in `.gitignore`) bzw. als GitHub-Secret `MAPILLARY_TOKEN`; Supabase-Adresse und öffentlicher Schlüssel als Secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY` (lokal `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`). Token nicht im Chat erfragen. Den Supabase-Secret-/service_role-Schlüssel nie verwenden.
 
 ## Rahmen und Technik
-- **Prototyp als PWA** (Vite + React + TypeScript, Karte: MapLibre GL mit OpenFreeMap-Stil). Später **native App (Expo/React Native)**.
+- **Prototyp als PWA** (Vite + React + TypeScript, Karte: MapLibre GL mit OpenFreeMap-Stil). Kartenstil wählbar in den Einstellungen (`src/web/mapStyle.ts`, localStorage): „hell“ = OpenFreeMap `liberty` (bunt wie Google Maps, Standard), „dunkel“ = `dark`; Wechsel lädt die App neu (laufende Begleitung bleibt gespeichert).
+- **Fahrrad-Routen (gewünscht, Nov. 2026, noch offen):** braucht eigenes Radwegenetz im Datenbau (Radwege, Einbahnen mit/ohne Radfreigabe, Gehwege ohne Radfreigabe ausschließen, `bicycle`-Tags) und eigenes Tempo. Nicht einfach das Fußwegenetz mit höherem Tempo nehmen (führt über Gehwege und gegen Einbahnen). Später **native App (Expo/React Native)**.
 - **Logik getrennt von der Oberfläche:** `src/core/` enthält nur Logik ohne Browser-Funktionen (Routing, Sicherheitswert, Öffnungszeiten, Begleit-Eskalation, Bewertungen) und soll in der nativen App wiederverwendet werden. `src/web/` ist die Web-Oberfläche.
 - **Speicherung nur lokal im Gerät** (IndexedDB über `src/web/storage.ts`), kein Server, keine Accounts.
 - **Pilotgebiet** in `config/gebiet.json`: Bezirke 2, 4, 5, 6, 7, 8, 9, 15, 16; Durchgangs-Bezirke 1 und 3 (Routen dürfen durch, Start/Ziel nicht). Nach Änderung `npm run data`. Daten pro Bezirk getrennt (`public/data/bezirk-XX.json`), die App lädt nur benötigte Bezirke.
