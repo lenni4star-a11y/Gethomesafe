@@ -488,9 +488,16 @@ export function App() {
 
           {plan && (
             <>
-              <div className={`route-cards ${plan.transit ? 'three' : ''}`} role="radiogroup" aria-label="Route wählen">
-                {(['safest', 'fastest', ...(plan.transit ? (['transit'] as const) : [])] as const).map((m) => {
-                  const r = m === 'transit' ? plan.transit! : plan[m];
+              <div className="route-cards three" role="radiogroup" aria-label="Route wählen">
+                {(['safest', 'fastest', 'transit'] as const).map((m) => {
+                  const r = m === 'transit' ? plan.transit : plan[m];
+                  if (!r)
+                    return (
+                      <button key={m} type="button" role="radio" aria-checked={false} disabled className="route-card unavailable">
+                        <span className="rc-title">Mit Öffis</span>
+                        <span className="rc-meta">{plan.fastest.seconds < 5 * 60 ? 'Weg zu kurz' : 'keine Verbindung gefunden'}</span>
+                      </button>
+                    );
                   return (
                     <button
                       key={m}
