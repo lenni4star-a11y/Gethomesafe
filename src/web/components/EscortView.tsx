@@ -74,7 +74,7 @@ export function EscortView({ session, now, lastPos, geoError, contacts, dispatch
         key={state.callAttempt}
         kind="check"
         voiceMode={voiceMode}
-        caller="Gethomesafe Begleitung"
+        caller="Goodway Begleitung"
         secondsLeft={left}
         onAnswer={(ok) => dispatch({ type: 'answer', ok, now: Date.now() })}
         onAccept={() => dispatch({ type: 'callAccepted', now: Date.now() })}

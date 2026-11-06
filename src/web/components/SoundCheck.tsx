@@ -33,7 +33,7 @@ export function SoundCheck({ voiceMode }: { voiceMode: VoiceMode }) {
     unlockAudio();
     setResult('Stimme spricht …');
     const voice = await germanVoice();
-    const how = await say('Hallo, hier ist deine Begleitung von Gethomesafe.', 'check-hallo', voiceMode);
+    const how = await say('Hallo, hier ist deine Begleitung von Goodway.', 'check-hallo', voiceMode);
     setResult(
       how === 'device'
         ? `Gerätestimme: ${voice?.name ?? 'deutsch'}.`

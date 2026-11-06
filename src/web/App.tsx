@@ -40,6 +40,7 @@ import { clearAll, useStored } from './storage';
 import { useEscort } from './useEscort';
 import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
+import { Icon, Wordmark } from './components/Icon';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
 type SheetState = 'collapsed' | 'half' | 'full';
@@ -308,14 +309,14 @@ export function App() {
       <MapView ref={map} index={planner?.index ?? null} onMapClick={onMapClick} />
 
       <header className="topbar">
-        <span className="brand">Gethomesafe</span>
+        <Wordmark />
         <span className="badge">Prototyp</span>
       </header>
       <button type="button" className="settings-btn" onClick={() => setShowSettings(true)} aria-label="Einstellungen">
-        ⚙
+        <Icon name="settings" size={22} />
       </button>
       <button type="button" className="ratings-btn" onClick={() => setShowRatings(true)} aria-label="Bewertungen">
-        ⭐
+        <Icon name="star" size={22} />
       </button>
 
       {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
@@ -334,7 +335,7 @@ export function App() {
             setSheet('collapsed');
           }}
         >
-          📷 Straße
+          <Icon name="camera" size={18} /> Straße
         </button>
       </div>
       {streetMode && !streetAt && (
@@ -427,11 +428,11 @@ export function App() {
                 </button>
               ) : (
                 <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
-                  🔍 Wohin?
+                  <Icon name="search" size={18} /> Wohin?
                 </button>
               )}
               <button type="button" className="icon-btn home-btn" onClick={goHome} aria-label="Nach Hause: sicherste Route planen" title="Nach Hause">
-                🏠
+                <Icon name="home" size={22} />
               </button>
             </div>
           ) : (
@@ -443,16 +444,16 @@ export function App() {
 
           <div className="quick-row" aria-label="Schnellwahl">
             <button type="button" className="chip home-chip" onClick={goHome}>
-              🏠 Nach Hause
+              <Icon name="home" size={16} /> Nach Hause
             </button>
             {favorites.map((f, i) => (
               <button key={i} type="button" className="chip" onClick={() => setEnd({ ...f, kind: 'favorite' })}>
-                ★ {f.label}
+                <Icon name="star" size={16} /> {f.label}
               </button>
             ))}
             {end && end.kind !== 'home' && !isFavorite && favorites.length < 6 && (
               <button type="button" className="chip" onClick={() => setFavorites([...favorites, { label: end.label, coords: end.coords, kind: 'favorite' }])}>
-                ☆ Merken
+                + Merken
               </button>
             )}
           </div>
@@ -471,7 +472,7 @@ export function App() {
           )}
 
           <div className="time-row">
-            <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? '☾ dunkel' : '☀ hell'}</span>
+            <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? 'dunkel' : 'hell'}</span>
             <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
               {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾
             </button>
@@ -550,7 +551,7 @@ export function App() {
           )}
 
           <button type="button" className="btn escort-start" onClick={() => setShowEscortSetup(true)}>
-            🫂 Begleitung starten
+            <Icon name="company" size={20} /> Begleitung starten
           </button>
 
 
@@ -669,7 +670,7 @@ export function App() {
             </>
           )}
           <button type="button" className="btn primary" onClick={() => (setArrived(null), setPick('rate'))}>
-            ⭐ Eine Stelle deines Wegs bewerten
+            <Icon name="star" size={18} /> Eine Stelle deines Wegs bewerten
           </button>
           <button type="button" className="btn" onClick={() => setArrived(null)}>
             Schließen

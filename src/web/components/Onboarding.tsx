@@ -39,20 +39,21 @@ export function Onboarding({ home, onHomeChange, contacts, onContactsChange, bbo
 
         {step === 0 && (
           <section>
-            <h2>Willkommen bei Gethomesafe</h2>
+            <h2>Willkommen bei Goodway</h2>
+            <p className="ob-claim">Komm gut heim.</p>
             <p>Diese App hilft dir, abends und nachts sicherer nach Hause zu kommen.</p>
             <ul className="ob-list">
               <li>
-                🗺 <b>Sicherster Heimweg:</b> bevorzugt beleuchtete Wege und Orte, die gerade offen sind.
+                <b>Sicherster Heimweg:</b> bevorzugt beleuchtete Wege und Orte, die gerade offen sind.
               </li>
               <li>
-                ⭐ <b>Wege bewerten:</b> Wie sicher hast du dich wo und wann gefühlt?
+                <b>Wege bewerten:</b> Wie sicher hast du dich wo und wann gefühlt?
               </li>
               <li>
-                🫂 <b>Begleitung:</b> Die App fragt regelmäßig nach, ob alles okay ist, und hilft dir, Kontakte zu benachrichtigen.
+                <b>Begleitung:</b> Die App fragt regelmäßig nach, ob alles okay ist, und hilft dir, Kontakte zu benachrichtigen.
               </li>
               <li>
-                🆘 <b>SOS-Knopf:</b> Notrufe, Hilfsstellen, Fake-Anruf und lauter Alarm – immer rechts unten.
+                <b>SOS-Knopf:</b> Notrufe, Hilfsstellen, Fake-Anruf und lauter Alarm – immer rechts unten.
               </li>
             </ul>
           </section>

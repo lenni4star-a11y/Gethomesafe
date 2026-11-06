@@ -11,7 +11,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
     <Modal title="Datenschutz" onClose={onClose}>
       <div className="privacy">
         <p>
-          <b>Kurz gesagt:</b> Gethomesafe hat keinen eigenen Server und keine Accounts. Alles, was du eingibst, bleibt auf deinem Handy.
+          <b>Kurz gesagt:</b> Goodway hat keinen eigenen Server und keine Accounts. Alles, was du eingibst, bleibt auf deinem Handy.
         </p>
 
         <h3>Was auf deinem Handy gespeichert wird</h3>

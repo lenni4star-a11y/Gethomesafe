@@ -1,4 +1,6 @@
-# Gethomesafe – Projekt-Briefing und Regeln
+# Goodway (früher Gethomesafe) – Projekt-Briefing und Regeln
+
+**Name (Nov. 2026):** Die App heißt jetzt **Goodway**, Slogan „Komm gut heim.“ (Arbeitstitel, Markenprüfung offen). Repo, GitHub-Pages-Adresse und der PIN-Hash-Präfix `gethomesafe:` bleiben unverändert. Marke: Design System „Goodway“ (dunkler Grund `--bg`, eine Akzentfarbe `--accent`, keine Emojis, Linien-Symbole aus `src/web/components/Icon.tsx`, Wortmarke „goodway.“). Die aufgenommene Stimme `public/audio/check-hallo` sagt noch den alten Namen: mit `scripts/make-voice` bzw. Piper neu erzeugen (Text in `scripts/voice-lines.tsv` ist schon angepasst).
 
 Diese Datei gilt für alle künftigen Sitzungen. Bitte zuerst lesen.
 
