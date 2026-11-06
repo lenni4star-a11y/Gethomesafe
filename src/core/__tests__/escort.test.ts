@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyPin, escortReducer, startEscort, type EscortState } from '../escort';
+import { classifyAnswer, classifyPin, escortReducer, startEscort, type EscortState } from '../escort';
 import type { LngLat } from '../types';
 import type { EscortSettings } from '../settings';
 
@@ -165,5 +165,47 @@ describe('Täuschungs-PIN', () => {
     expect(classifyPin('b', 'a', 'b')).toBe('decoy');
     expect(classifyPin('c', 'a', 'b')).toBe(null);
     expect(classifyPin('b', 'a', null)).toBe(null);
+  });
+});
+
+describe('Begleitmodus: angenommener Anruf', () => {
+  it('läuft nicht ab, während man im Gespräch ist', () => {
+    let s = tick(startEscort(settings, 0), 60_000);
+    s = tick(s, 80_000);
+    expect(s.phase).toBe('call');
+    // nach 25 s angenommen: die Antwortzeit beginnt neu
+    s = escortReducer(s, { type: 'callAccepted', now: 105_000 });
+    s = tick(s, 80_000 + 30_000);
+    expect(s.phase).toBe('call');
+    s = tick(s, 105_000 + 30_000);
+    expect(s.phase).toBe('contact');
+  });
+
+  it('ändert außerhalb eines Anrufs nichts', () => {
+    const s = startEscort(settings, 0);
+    expect(escortReducer(s, { type: 'callAccepted', now: 1000 })).toBe(s);
+  });
+});
+
+describe('Gesprochene Antwort', () => {
+  it('versteht „gut“ und „okay“', () => {
+    expect(classifyAnswer('Gut')).toBe(true);
+    expect(classifyAnswer('ja alles okay')).toBe(true);
+    expect(classifyAnswer('passt')).toBe(true);
+  });
+
+  it('wertet Verneinungen nie als okay', () => {
+    expect(classifyAnswer('nicht so gut')).toBe(false);
+    expect(classifyAnswer('gar nicht okay')).toBe(false);
+    expect(classifyAnswer('mir geht es schlecht')).toBe(false);
+    expect(classifyAnswer('ich fühle mich unsicher')).toBe(false);
+    expect(classifyAnswer('nein')).toBe(false);
+    expect(classifyAnswer('Hilfe!')).toBe(false);
+  });
+
+  it('erkennt Wörter nur als ganze Wörter', () => {
+    expect(classifyAnswer('Jacke')).toBe(null);
+    expect(classifyAnswer('Rockmusik')).toBe(null);
+    expect(classifyAnswer('')).toBe(null);
   });
 });

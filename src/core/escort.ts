@@ -67,7 +67,9 @@ export type EscortEvent =
   /** Route wurde neu berechnet (bewusst anderer Weg) */
   | { type: 'rerouted'; now: number }
   /** „Noch nicht angekommen“ */
-  | { type: 'notArrived'; now: number };
+  | { type: 'notArrived'; now: number }
+  /** Anruf angenommen: Die Antwortzeit beginnt neu, damit das Gespräch nicht mittendrin als „keine Antwort“ abläuft */
+  | { type: 'callAccepted'; now: number };
 
 /** Ab so viel Bewegung (m) gilt man nicht mehr als „stehend“ */
 export const STILL_RADIUS = 25;
@@ -203,7 +205,23 @@ export function escortReducer(s: EscortState, e: EscortEvent): EscortState {
       return { ...s, watch: { ...s.watch, offRouteSince: null, offRouteAcknowledged: false } };
     case 'notArrived':
       return { ...s, askArrival: false };
+    case 'callAccepted':
+      if (s.phase !== 'call') return s;
+      return { ...s, deadline: e.now + callDuration(s.settings) };
   }
+}
+
+/**
+ * Gesprochene Antwort im Anruf auswerten: true = alles okay, false = Hilfe nötig, null = nicht verstanden.
+ * Im Zweifel nie „okay“: Sobald eine Verneinung oder ein Notfall-Wort vorkommt, gilt die Antwort als „nicht okay“,
+ * damit „nicht so gut“ oder „gar nicht okay“ nicht als „gut“ verstanden wird.
+ */
+export function classifyAnswer(text: string): boolean | null {
+  const t = ` ${text.toLowerCase().replace(/[.,!?;:„“"'’]/g, ' ')} `;
+  const has = (words: string[]) => words.some((w) => new RegExp(`(^|[^a-zäöüß])${w}([^a-zäöüß]|$)`).test(t));
+  if (has(['nicht', 'nichts', 'kein', 'keine', 'nein', 'schlecht', 'hilfe', 'helfen', 'angst', 'notfall', 'unsicher', 'bedroht', 'verfolgt', 'polizei', 'mies'])) return false;
+  if (has(['gut', 'okay', 'ok', 'passt', 'alles klar', 'ja', 'super', 'bestens', 'sicher'])) return true;
+  return null;
 }
 
 /** Welche PIN wurde beim Beenden eingegeben? Täuschungs-PIN beendet sichtbar normal, löst aber den stillen Alarm aus. */
