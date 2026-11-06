@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'react';
 import type { ColorSegment } from '../../core/analysis';
 import type { LngLat } from '../../core/types';
 import { CLASS_COLORS } from './MapView';
+import { mapStyleUrl } from '../mapStyle';
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+const STYLE_URL = mapStyleUrl();
 
 interface Props {
   /** Route mit Farbstufen (optional) */

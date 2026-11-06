@@ -3,6 +3,7 @@ import type { ParkAvoidance } from '../../core/safety';
 import { Modal } from './Modal';
 import { SoundCheck } from './SoundCheck';
 import { BUILT_IN_TOKEN } from '../mapillary';
+import { getMapStyle, setMapStyle, type MapStyleChoice } from '../mapStyle';
 
 interface Props {
   settings: Settings;
@@ -39,6 +40,24 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
           />
         </label>
         <p className="fineprint">Wege durch oder direkt neben Parks werden nachts abgewertet, aber nie ganz ausgeschlossen.</p>
+      </section>
+
+      <section className="settings-section">
+        <h3>Karte</h3>
+        <label className="field">
+          <span>Aussehen der Karte</span>
+          <select
+            value={getMapStyle()}
+            onChange={(e) => {
+              setMapStyle(e.target.value as MapStyleChoice);
+              window.location.reload(); // Karte mit neuem Stil laden
+            }}
+          >
+            <option value="hell">Hell, bunt (wie Google Maps)</option>
+            <option value="dunkel">Dunkel (blendet nachts weniger)</option>
+          </select>
+        </label>
+        <p className="fineprint">Beim Wechseln lädt die App kurz neu. Während einer Begleitung lieber nicht wechseln.</p>
       </section>
 
       <section className="settings-section">
