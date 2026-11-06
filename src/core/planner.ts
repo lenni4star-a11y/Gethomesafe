@@ -113,7 +113,14 @@ export class Planner {
     const walkLen = walks.reduce((s, w) => s + w.length, 0) || 1;
     const scoreWalk = walks.reduce((s, w) => s + w.score * w.length, 0) / walkLen;
     const darkStops = ctx.dark ? [rides[0].from, rides[rides.length - 1].to].filter((st) => !st.lit).length : 0;
-    const score = Math.max(1, Math.min(10, Math.round(scoreWalk - (ctx.dark && opt.waitMin > 10 ? 1 : 0) - darkStops * 0.5)));
+    const score = transitScore({
+      walkScore: walks.length ? scoreWalk : 8,
+      walkMin: walks.reduce((m, w) => m + w.seconds / 60, 0),
+      rides: rides.map((r) => ({ minutes: r.arriveMin - r.departMin, mode: r.mode })),
+      waitMin: opt.waitMin,
+      darkStops,
+      dark: ctx.dark,
+    });
     const lineText = rides.map((r) => r.line).join(' → ');
     const reasons = [
       `${lineText}, ab ${formatClock(rides[0].departMin)}`,
@@ -121,6 +128,7 @@ export class Planner {
       `${Math.round(walkLen / 10) * 10} m zu Fuß`,
       ctx.dark ? (rides[0].from.lit ? 'Einstiegs-Haltestelle beleuchtet' : 'Einstiegs-Haltestelle: Beleuchtung unbekannt') : null,
       opt.transfers ? '1 Umstieg' : null,
+      'Fahrt zählt als sicherer Teil (Fahrgäste, Personal, Notsprechstelle)',
       notFaster ? 'zu Fuß etwa gleich schnell oder schneller' : null,
       'Fahrplan, ohne Live-Verspätungen',
     ].filter(Boolean) as string[];
@@ -168,7 +176,37 @@ export class Planner {
 export function recommendTransit(plan: Pick<PlanResult, 'safest' | 'transit'>): boolean {
   const t = plan.transit;
   if (!t) return false;
+  // Nachts: Öffis vorauswählen, wenn sie mindestens so sicher sind und höchstens 5 min länger dauern
+  if (plan.safest.dark && t.score >= plan.safest.score && t.seconds <= plan.safest.seconds + 5 * 60) return true;
   return plan.safest.seconds >= 25 * 60 && t.seconds <= plan.safest.seconds * (2 / 3);
+}
+
+/**
+ * Sicherheitswert einer Öffi-Route (1–10): Mittel über die Zeit.
+ * Fahren gilt als sicherster Teil (andere Fahrgäste, Fahrer*in, Notsprechstellen, Kameras):
+ * U-Bahn und Zug 9, Straßenbahn und Bus 9 am Tag und 8 in der Nacht.
+ * Warten: am Tag 8; nachts 7 an beleuchteten, 5 an dunklen bzw. unbekannten Haltestellen.
+ * Fußwege zählen mit ihrem eigenen Wert (sicherste Fußroute).
+ */
+export function transitScore(p: {
+  walkScore: number;
+  walkMin: number;
+  rides: { minutes: number; mode: number }[];
+  waitMin: number;
+  darkStops: number;
+  dark: boolean;
+}): number {
+  const rideScore = (mode: number) => (mode === 1 || mode === 2 ? 9 : p.dark ? 8 : 9);
+  const waitScore = !p.dark ? 8 : p.darkStops > 0 ? 5 : 7;
+  const parts = [
+    { min: Math.max(p.walkMin, 0), score: p.walkScore },
+    ...p.rides.map((r) => ({ min: Math.max(r.minutes, 0), score: rideScore(r.mode) })),
+    { min: Math.max(p.waitMin, 0), score: waitScore },
+  ];
+  const total = parts.reduce((s, x) => s + x.min, 0);
+  if (total <= 0) return Math.max(1, Math.min(10, Math.round(p.walkScore)));
+  const avg = parts.reduce((s, x) => s + x.min * x.score, 0) / total;
+  return Math.max(1, Math.min(10, Math.round(avg)));
 }
 
 /** Ist eine Baustelle am gewählten Tag aktiv? (Datum als JJJJ-MM-TT) */
