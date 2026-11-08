@@ -8,6 +8,10 @@ on:
       bezirk:
         description: Bezirksnummer (z. B. 7)
         default: '7'
+      modell:
+        description: Zusätzlich Bild-Text-Modell (CLIP) testen
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +19,7 @@ permissions:
 jobs:
   pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +29,17 @@ jobs:
       - run: python3 scripts/photo-pilot.py "${{ inputs.bezirk }}"
         env:
           MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+      - name: Bild-Text-Modell (optional)
+        if: ${{ inputs.modell }}
+        run: |
+          pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install transformers==4.44.2
+          python3 scripts/photo-clip.py "${{ inputs.bezirk }}"
+        env:
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
       - run: cat photo-pilot/zusammenfassung.md >> "$GITHUB_STEP_SUMMARY"
+      - if: ${{ inputs.modell }}
+        run: cat photo-pilot/zusammenfassung-modell.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: foto-pilot-bezirk-${{ inputs.bezirk }}
