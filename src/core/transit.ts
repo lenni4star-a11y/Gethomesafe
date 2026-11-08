@@ -327,3 +327,23 @@ export function formatClock(min: number): string {
 }
 
 export const MODE_LABEL: Record<number, string> = { 0: 'Straßenbahn', 1: 'U-Bahn', 2: 'Zug', 3: 'Bus', 7: 'Seilbahn' };
+
+/**
+ * Linienfarbe, angelehnt an die Farben der Wiener Linien (U1 rot, U2 violett, U3 orange, U4 grün, U5 türkis, U6 braun).
+ * Straßenbahn rot, Bus dunkelblau, Nachtbus (N…) fast schwarz, Züge grau. Werte von Hand gewählt, nicht offiziell geliefert.
+ */
+const U_COLORS: Record<string, string> = {
+  U1: '#e3000f',
+  U2: '#a762a3',
+  U3: '#ee7d00',
+  U4: '#319f49',
+  U5: '#2a9d9c',
+  U6: '#a0712c',
+};
+export function lineColor(line: string, mode: number): string {
+  if (U_COLORS[line]) return U_COLORS[line];
+  if (/^N/.test(line) && mode === 3) return '#1c1f3a';
+  if (mode === 0) return '#c8102e';
+  if (mode === 3) return '#1f4e9c';
+  return '#5c6670';
+}

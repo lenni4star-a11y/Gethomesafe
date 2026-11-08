@@ -6,7 +6,7 @@ import { summarize, type RouteSummary } from './analysis';
 import { bboxAround, bboxIntersects, pointInRing } from './geo';
 import { Graph } from './graph';
 import { findRoute } from './routing';
-import { formatClock, MODE_LABEL, TransitNetwork, type RideLeg, type TransitData } from './transit';
+import { formatClock, lineColor, MODE_LABEL, TransitNetwork, type RideLeg, type TransitData } from './transit';
 import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
@@ -148,6 +148,7 @@ export class Planner {
       mode: 'transit',
       transit: opt,
       rides: rides.map((r) => r.path),
+      rideInfo: rides.map((r) => ({ line: r.line, mode: r.mode, color: lineColor(r.line, r.mode) })),
       coords: [...(a?.coords ?? [from]), ...rides.flatMap((r) => r.path), ...(b?.coords ?? [to])],
       length: walkLen,
       seconds: Math.max(opt.totalMin * 60, (a?.seconds ?? 0) + (b?.seconds ?? 0)),

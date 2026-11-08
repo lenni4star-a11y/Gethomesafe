@@ -2645,3 +2645,91 @@ a.btn {
   text-align: left;
   font-size: inherit;
 }
+
+/* Öffi-Ansicht: Linien-Schilder und Teilstrecken wie in Karten-Apps */
+.line-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+/* U-Bahn: eckiges Schild wie bei den Wiener Linien */
+.line-badge.ubahn {
+  border-radius: 4px;
+}
+
+.maplibregl-marker.line-badge {
+  border: 2px solid #ffffff;
+  font-size: 0.9rem;
+}
+
+.rc-lines {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.tr-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.tr-chain-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tr-sep {
+  color: var(--muted);
+}
+
+.tr-walk {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.tr-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+
+.tr-step {
+  display: grid;
+  grid-template-columns: 6px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+
+.tr-rail {
+  border-radius: 3px;
+}
+
+/* Fußweg als gepunktete Linie */
+.tr-rail-walk {
+  background: radial-gradient(circle, var(--muted) 1.5px, transparent 2px) center top / 6px 8px repeat-y;
+}
+
+.tr-ride {
+  display: grid;
+  gap: 3px;
+}

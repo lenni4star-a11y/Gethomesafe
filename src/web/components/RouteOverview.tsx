@@ -7,6 +7,8 @@ import type { LngLat } from '../../core/types';
 import { formatDistance } from '../format';
 import { PLACE_META, PLACE_ORDER } from '../places';
 import { CLASS_COLORS } from './MapView';
+import { LineBadge } from './Icon';
+import { formatClock, lineColor } from '../../core/transit';
 
 const HINT_LABEL: Record<Hint['kind'], string> = {
   dark: 'dunkel',
@@ -90,21 +92,73 @@ export function RouteOverview({ route, onFocus }: Props) {
 
 function TransitOverview({ route }: { route: RouteSummary }) {
   const legs = route.transit?.legs ?? [];
+  let ride = 0;
+  const color = (line: string, mode: number) => lineColor(line, mode);
   return (
     <section className="overview" aria-labelledby="overview-h">
       <h3 id="overview-h">Weg im Überblick</h3>
-      <ol className="ov-list ov-steps">
-        {legs.map((l, i) =>
-          l.type === 'walk' ? (
-            <li key={i}>zu Fuß {formatDistance(l.meters)}</li>
-          ) : (
-            <li key={i}>
-              {l.line} von {l.from.name} bis {l.to.name}
-              {l.waitMin ? ` (${l.waitMin} min warten)` : ''}
+
+      {/* Kurzfassung wie in Karten-Apps: Gehen › U3 › U1 › Gehen */}
+      <p className="tr-chain">
+        {legs.map((l, i) => (
+          <span key={i} className="tr-chain-item">
+            {i > 0 && <span className="tr-sep" aria-hidden="true">›</span>}
+            {l.type === 'walk' ? (
+              <span className="tr-walk">
+                <WalkIcon /> {Math.max(1, Math.round(l.minutes))}
+              </span>
+            ) : (
+              <LineBadge line={l.line} mode={l.mode} color={color(l.line, l.mode)} />
+            )}
+          </span>
+        ))}
+      </p>
+
+      <ol className="tr-steps">
+        {legs.map((l, i) => {
+          if (l.type === 'walk')
+            return (
+              <li key={i} className="tr-step tr-step-walk">
+                <span className="tr-rail tr-rail-walk" aria-hidden="true" />
+                <span>
+                  zu Fuß {formatDistance(l.meters)} · etwa {Math.max(1, Math.round(l.minutes))} min
+                </span>
+              </li>
+            );
+          const c = color(l.line, l.mode);
+          ride++;
+          return (
+            <li key={i} className="tr-step">
+              <span className="tr-rail" style={{ background: c }} aria-hidden="true" />
+              <span className="tr-ride">
+                <b>
+                  {formatClock(l.departMin)} {l.from.name}
+                </b>
+                <span>
+                  <LineBadge line={l.line} mode={l.mode} color={c} /> Richtung {l.headsign}
+                </span>
+                <span className="muted">
+                  {l.stopCount} {l.stopCount === 1 ? 'Station' : 'Stationen'} · {Math.max(1, l.arriveMin - l.departMin)} min
+                  {l.waitMin ? ` · ${l.waitMin} min warten${ride > 1 ? ' (Umstieg)' : ''}` : ''}
+                  {route.dark && !l.from.lit ? ' · Haltestelle: Beleuchtung unbekannt' : ''}
+                </span>
+                <b>
+                  {formatClock(l.arriveMin)} {l.to.name}
+                </b>
+              </span>
             </li>
-          ),
-        )}
+          );
+        })}
       </ol>
     </section>
+  );
+}
+
+function WalkIcon() {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-label="zu Fuß" role="img">
+      <circle cx="13" cy="4.5" r="1.8" />
+      <path d="m10 21 2-6 3 3v3M9.5 11.5 12 8l3 3 2.5 1M12 8l-2 7" />
+    </svg>
   );
 }
