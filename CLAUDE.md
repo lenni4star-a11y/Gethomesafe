@@ -114,6 +114,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 ## Foto-Pilot (Zustimmung Nov. 2026: „wenn es funktioniert“)
 - Erster Schritt, bewusst ohne Bild-KI-Modell (Lizenzen der gängigen Straßen-Modelle sind meist nicht-kommerziell): `scripts/photo-pilot.py` misst die **Helligkeit von Nachtfotos** (Mapillary, 20–5 Uhr, keine 360°-Fotos, Vorschaubild 256 px) je Wegstück eines Bezirks. Keine Personen-Auswertung.
 - Prüft selbst, ob es funktioniert: Nachtfotos auf laut Daten beleuchteten Wegen müssen deutlich heller sein als auf unbeleuchteten (Tabelle in der Zusammenfassung).
+- Teil 2 (Häkchen „Bild-Text-Modell“): `scripts/photo-clip.py` bewertet Straßenfotos mit CLIP (openai/clip-vit-base-patch32, MIT-Lizenz) gegen Sätze nur über Ort und Licht (Vorbild: UCL „Safest Way“). Zusammenfassung listet am besten/schlechtesten eingeschätzte Straßen mit Foto-Links zur menschlichen Prüfung auf Vorurteile.
 - Läuft nur über GitHub → Actions → „Foto-Pilot (Test)“ (Bezirk wählbar), Ergebnis als Download unter „Artifacts“. **Fließt nicht in die App ein**, bis die Projektinhaber·in nach Ansicht der Ergebnisse zustimmt; dann höchstens 10 % Gewicht und nur als Lückenfüller.
 
 ## Konzept (nicht umsetzen ohne Zustimmung): KI-Einschätzung aus Straßenfotos
