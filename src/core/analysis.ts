@@ -121,7 +121,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     if (ctx.activeWorks) for (const id of e.works) if (ctx.activeWorks.has(id)) workIds.add(id);
     if (e.flags & Flag.Park) parkLen += e.length;
     if (e.kind === WayKind.Main) mainLen += e.length;
-    if ((e.frontage ?? 0) >= 2) shopLen += e.length;
+    if ((e.frontage ?? 0) >= 5) shopLen += e.length;
     if (e.flags & Flag.Tunnel) tunnels++;
     for (const p of openPoisNear(e, graph.pois, ctx)) open.set(p.id, p);
 

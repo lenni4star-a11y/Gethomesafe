@@ -77,7 +77,7 @@ describe('Geschäftsstraßen', () => {
     const ctx = createContext(night, true);
     const pois = new Map();
     const plain = edgeRisk(edge(), pois, ctx);
-    const shops = edgeRisk(edge({ frontage: 5 }), pois, ctx);
+    const shops = edgeRisk(edge({ frontage: 12 }), pois, ctx);
     expect(shops.life).toBeLessThan(plain.life);
     expect(shops.risk).toBeLessThan(plain.risk);
   });
