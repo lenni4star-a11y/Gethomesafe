@@ -69,3 +69,12 @@ export function Wordmark() {
     </span>
   );
 }
+
+/** Linien-Schild wie bei den Wiener Linien: U-Bahn eckig, Bim/Bus abgerundet, in der Linienfarbe */
+export function LineBadge({ line, mode, color }: { line: string; mode: number; color: string }) {
+  return (
+    <span className={`line-badge${mode === 1 ? ' ubahn' : ''}`} style={{ background: color }}>
+      {line}
+    </span>
+  );
+}

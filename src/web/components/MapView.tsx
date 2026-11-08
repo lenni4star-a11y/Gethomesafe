@@ -55,6 +55,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
   const homeMarker = useRef<maplibregl.Marker>();
   const flight = useRef<number | null>(null);
   const flyDot = useRef<maplibregl.Marker>();
+  const lineBadges = useRef<maplibregl.Marker[]>([]);
   const clickRef = useRef(onMapClick);
   clickRef.current = onMapClick;
 
@@ -125,22 +126,30 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
             },
           });
 
-        // Öffi-Fahrten (gestrichelt) mit Ein- und Ausstieg
+        // Öffi-Fahrten wie in Karten-Apps: durchgehende Linie in der Linienfarbe (U3 orange …), weiß umrandet, Haltestellen als weiße Punkte
         map.addSource('route-rides', { type: 'geojson', data: empty });
+        map.addLayer({
+          id: 'route-rides-casing',
+          type: 'line',
+          source: 'route-rides',
+          filter: ['==', ['geometry-type'], 'LineString'],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': '#ffffff', 'line-width': 11 },
+        });
         map.addLayer({
           id: 'route-rides',
           type: 'line',
           source: 'route-rides',
           filter: ['==', ['geometry-type'], 'LineString'],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: { 'line-color': '#7fb2ff', 'line-width': 5, 'line-dasharray': [1, 1.2] },
+          paint: { 'line-color': ['coalesce', ['get', 'color'], '#1f4e9c'], 'line-width': 7 },
         });
         map.addLayer({
           id: 'route-rides-stops',
           type: 'circle',
           source: 'route-rides',
           filter: ['==', ['geometry-type'], 'Point'],
-          paint: { 'circle-radius': 7, 'circle-color': '#15131f', 'circle-stroke-color': '#7fb2ff', 'circle-stroke-width': 3 },
+          paint: { 'circle-radius': 6, 'circle-color': '#ffffff', 'circle-stroke-color': ['coalesce', ['get', 'color'], '#1f4e9c'], 'circle-stroke-width': 3 },
         });
 
         // Bewertungen (Phase 3)
@@ -201,9 +210,17 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
         (map.getSource('route-rides') as GeoJSONSource).setData({
           type: 'FeatureCollection',
           features: [
-            ...(chosen?.rides ?? []).map((path) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: path } })),
-            ...(chosen?.rides ?? []).flatMap((path) =>
-              [path[0], path[path.length - 1]].map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
+            ...(chosen?.rides ?? []).map((path, i) => ({
+              type: 'Feature' as const,
+              properties: { color: chosen?.rideInfo?.[i]?.color ?? null },
+              geometry: { type: 'LineString' as const, coordinates: path },
+            })),
+            ...(chosen?.rides ?? []).flatMap((path, i) =>
+              [path[0], path[path.length - 1]].map((c) => ({
+                type: 'Feature' as const,
+                properties: { color: chosen?.rideInfo?.[i]?.color ?? null },
+                geometry: { type: 'Point' as const, coordinates: c },
+              })),
             ),
           ],
         });
@@ -214,6 +231,18 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
         (map.getSource('route-other') as GeoJSONSource).setData(
           other ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: other.coords } } : empty,
         );
+
+        // Linien-Schild (z. B. „U3“) in der Mitte jeder Fahrt
+        lineBadges.current.forEach((m) => m.remove());
+        lineBadges.current = (chosen?.rides ?? []).map((path, i) => {
+          const info = chosen?.rideInfo?.[i];
+          const el = document.createElement('span');
+          el.className = `line-badge${info?.mode === 1 ? ' ubahn' : ''}`;
+          el.textContent = info?.line ?? '';
+          el.style.background = info?.color ?? '#1f4e9c';
+          el.setAttribute('aria-hidden', 'true');
+          return new maplibregl.Marker({ element: el }).setLngLat(path[Math.floor(path.length / 2)]).addTo(map);
+        });
 
         placeMarkers.current.forEach((m) => m.remove());
         placeMarkers.current = (chosen?.openPlaces ?? []).map((p) => placeMarker(p, date).addTo(map));

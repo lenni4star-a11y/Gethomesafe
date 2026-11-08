@@ -38,6 +38,8 @@ export interface RouteSummary {
   mode: RouteMode | 'transit';
   /** Öffi-Fahrten (nur bei mode 'transit'), für die Karte */
   rides?: LngLat[][];
+  /** zu jeder Fahrt: Linie, Verkehrsmittel und Farbe (gleiche Reihenfolge wie rides) */
+  rideInfo?: { line: string; mode: number; color: string }[];
   /** die Öffi-Verbindung (nur bei mode 'transit') */
   transit?: TransitOption;
   coords: LngLat[];

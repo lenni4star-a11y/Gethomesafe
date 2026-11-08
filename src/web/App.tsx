@@ -40,7 +40,7 @@ import { clearAll, useStored } from './storage';
 import { useEscort } from './useEscort';
 import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
-import { Icon, Wordmark } from './components/Icon';
+import { Icon, LineBadge, Wordmark } from './components/Icon';
 import { RouteOverview } from './components/RouteOverview';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
@@ -514,7 +514,16 @@ export function App() {
                         <small>/10</small>
                       </span>
                       <span className="rc-meta">
-                        {formatDuration(r.seconds)} · {m === 'transit' ? transitLines(r) : formatDistance(r.length)}
+                        {formatDuration(r.seconds)}
+                        {m === 'transit' ? (
+                          <span className="rc-lines">
+                            {(r.rideInfo ?? []).map((ri, i) => (
+                              <LineBadge key={i} {...ri} />
+                            ))}
+                          </span>
+                        ) : (
+                          ` · ${formatDistance(r.length)}`
+                        )}
                       </span>
                     </button>
                   );
