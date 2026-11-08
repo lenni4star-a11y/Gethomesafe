@@ -759,19 +759,20 @@ input {
 }
 
 .place-marker {
-  width: 30px;
-  height: 30px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border-radius: 50%;
   border: 2px solid #15131f;
-  background: #2a2640;
+  background: #5ee0b0;
   box-shadow: 0 0 0 2px #5ee0b0;
-  font-size: 15px;
+  font-size: 0;
   line-height: 1;
   cursor: pointer;
 }
 
 .cat-police {
+  background: #7fb2ff;
   box-shadow: 0 0 0 2px #7fb2ff;
 }
 
@@ -2573,4 +2574,74 @@ a.btn {
 .live-viewer .maplibregl-ctrl-bottom-right {
   top: calc(env(safe-area-inset-top) + 8px);
   bottom: auto;
+}
+
+/* Weg im Überblick (RouteOverview) */
+.overview {
+  margin-top: 14px;
+}
+
+.overview h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.ov-strip-wrap {
+  position: relative;
+  padding-top: 10px;
+}
+
+.ov-strip {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.ov-part {
+  min-width: 2px;
+}
+
+.ov-medium {
+  background-image: repeating-linear-gradient(90deg, transparent 0 6px, rgba(0, 0, 0, 0.3) 6px 9px) !important;
+}
+
+/* Markierung über dem Streifen: hier ist eine Stelle, auf die man sich einstellen kann */
+.ov-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 26px;
+  margin-left: -1px;
+  background: var(--text);
+  border-radius: 1px;
+}
+
+.ov-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.ov-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.ov-steps {
+  list-style: decimal;
+  padding-left: 1.2em;
+}
+
+.ov-hint {
+  padding: 0;
+  text-align: left;
+  font-size: inherit;
 }
