@@ -216,6 +216,12 @@ function poiCategory(t) {
   return null;
 }
 
+// Geschäfte und Lokale im Erdgeschoss („Geschäftsstraße“), unabhängig von Öffnungszeiten:
+// auch geschlossen gibt es Schaufensterlicht, Eingänge und Leben in der Straße.
+const FRONT_AMENITY = ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'ice_cream', 'bank', 'pharmacy', 'post_office', 'doctors', 'dentist', 'clinic'];
+const isFrontage = (t) => (t.shop && !['vacant', 'no'].includes(t.shop)) || FRONT_AMENITY.includes(t.amenity);
+const FRONT_RADIUS = 20;
+
 // ---------------------------------------------------------------- Ablauf
 
 async function main() {
@@ -409,6 +415,7 @@ async function main() {
   const roads = [];
   const greenWays = []; // { id, refs, rel? }
   const poiWays = [];
+  const frontWays = []; // Geschäfte als Fläche (nur Umriss-Punkte)
   const needed = new Set();
   for await (const item of createOSMStream(pbf, { withInfo: false })) {
     if (!item.type || item.type === 'node') continue;
@@ -428,6 +435,9 @@ async function main() {
     if (cat) {
       poiWays.push({ id: item.id, refs: item.refs, t, cat });
       item.refs.forEach((r) => needed.add(r));
+    } else if (isFrontage(t)) {
+      frontWays.push(item.refs);
+      item.refs.forEach((r) => needed.add(r));
     }
   }
   log(`  ${roads.length} Wege, ${greenWays.length} Grünflächen-Teile, ${poiWays.length} Orte als Fläche`);
@@ -435,6 +445,7 @@ async function main() {
   log('OSM 3/3: Punkte');
   const coord = new Map();
   const pois = [];
+  const frontPts = [];
   for await (const item of createOSMStream(pbf, { withInfo: false })) {
     if (!item.type) continue;
     if (item.type !== 'node') break;
@@ -442,6 +453,17 @@ async function main() {
     if (item.tags && inArea(item.lon, item.lat)) {
       const cat = poiCategory(item.tags);
       if (cat) pois.push({ id: 'n' + item.id, cat, t: item.tags, lon: item.lon, lat: item.lat });
+      if (isFrontage(item.tags)) frontPts.push([item.lon, item.lat]);
+    }
+  }
+  for (const refs of frontWays) {
+    const pts = refs.map((r) => coord.get(r)).filter(Boolean);
+    if (pts.length) frontPts.push([pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]);
+  }
+  for (const w of poiWays) {
+    if (isFrontage(w.t)) {
+      const pts = w.refs.map((r) => coord.get(r)).filter(Boolean);
+      if (pts.length) frontPts.push([pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]);
     }
   }
   for (const w of poiWays) {
@@ -514,6 +536,9 @@ async function main() {
 
   const poiGrid = new Grid(50);
   pois.forEach((p, i) => poiGrid.add(p.lon, p.lat, i));
+  const frontGrid = new Grid(25);
+  for (const fp of frontPts) if (inArea(fp[0], fp[1])) frontGrid.add(fp[0], fp[1], fp);
+  log('Geschäfte/Lokale im Erdgeschoss:', frontPts.length);
 
   const files = new Map(bezirke.map((b) => [b.nr, { nodes: new Map(), edges: [], names: new Map(), pois: new Set() }]));
   let edgeCount = 0;
@@ -576,6 +601,12 @@ async function main() {
           f2 |= F.PARK_NEAR;
       }
 
+      // Geschäfte im Erdgeschoss pro 100 m
+      const fronts = new Set();
+      for (let k = 0; k < samples.length; k += 2)
+        for (const fp of frontGrid.near(samples[k][0], samples[k][1])) if (dist(fp, samples[k]) <= FRONT_RADIUS) fronts.add(fp);
+      const frontage = Math.round((fronts.size / Math.max(len, 50)) * 1000) / 10;
+
       const near = new Set();
       for (let k = 0; k < samples.length; k += 3)
         for (const pi of poiGrid.near(samples[k][0], samples[k][1]))
@@ -601,7 +632,7 @@ async function main() {
       const poiIds = [...near].map((pi) => pois[pi].id);
       poiIds.forEach((id) => file.pois.add(id));
       // Schema siehe src/core/types.ts (RawEdge)
-      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works]]);
+      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage]);
       edgeCount++;
     }
   }

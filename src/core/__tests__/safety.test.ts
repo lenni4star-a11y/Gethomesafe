@@ -71,3 +71,18 @@ describe('Zusatzdaten Stadt Wien', () => {
     expect(photo).toBeLessThan(edgeRisk(edge({ lit: 'unknown', litSource: 'none', lampCoverage: 0 }), pois, ctx).light);
   });
 });
+
+describe('Geschäftsstraßen', () => {
+  it('senken nachts das Risiko, auch wenn nichts geöffnet hat', () => {
+    const ctx = createContext(night, true);
+    const pois = new Map();
+    const plain = edgeRisk(edge(), pois, ctx);
+    const shops = edgeRisk(edge({ frontage: 5 }), pois, ctx);
+    expect(shops.life).toBeLessThan(plain.life);
+    expect(shops.risk).toBeLessThan(plain.risk);
+  });
+  it('alte Daten ohne Angabe ändern nichts', () => {
+    const ctx = createContext(night, true);
+    expect(edgeRisk(edge({ frontage: undefined }), new Map(), ctx).life).toBe(1);
+  });
+});
