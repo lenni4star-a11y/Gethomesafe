@@ -1,0 +1,32 @@
+# Foto-Pilot: misst die Helligkeit von Nachtfotos (Mapillary) je Wegstück in einem Bezirk.
+# Ergebnis nur als Download unter „Artifacts“, nichts wird veröffentlicht oder in die App übernommen.
+name: Foto-Pilot (Test)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bezirk:
+        description: Bezirksnummer (z. B. 7)
+        default: '7'
+
+permissions:
+  contents: read
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow==10.4.0
+      - run: python3 scripts/photo-pilot.py "${{ inputs.bezirk }}"
+        env:
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+      - run: cat photo-pilot/zusammenfassung.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foto-pilot-bezirk-${{ inputs.bezirk }}
+          path: photo-pilot/
