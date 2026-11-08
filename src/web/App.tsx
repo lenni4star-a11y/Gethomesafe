@@ -41,6 +41,7 @@ import { useEscort } from './useEscort';
 import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
 import { Icon, Wordmark } from './components/Icon';
+import { RouteOverview } from './components/RouteOverview';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
 type SheetState = 'collapsed' | 'half' | 'full';
@@ -527,6 +528,13 @@ export function App() {
 
               {chosen && (
                 <>
+                  <RouteOverview
+                    route={chosen}
+                    onFocus={(p) => {
+                      setSheet('collapsed');
+                      map.current?.focus(p);
+                    }}
+                  />
                   <p className="reasons">{chosen.reasons.join(' · ')}</p>
                   <div className="actions">
                     <button type="button" className="btn primary" onClick={() => (setPhotos(true), setSheet('collapsed'))}>

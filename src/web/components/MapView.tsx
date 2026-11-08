@@ -7,7 +7,7 @@ import { closesAt } from '../../core/openingHours';
 import type { PlanResult } from '../../core/planner';
 import type { Selection } from '../App';
 import type { DataIndex, LngLat, Poi } from '../../core/types';
-import { PLACE_META, placeKindLabel, placeName } from '../places';
+import { placeKindLabel, placeName } from '../places';
 import { mapStyleUrl } from '../mapStyle';
 
 // Freier Kartenstil von OpenFreeMap (kein Account, keine Nutzungsgrenze für faire Nutzung)
@@ -78,7 +78,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
     );
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     // Bei weitem Zoom Orts-Symbole als kleine Punkte zeigen
-    const updateFar = () => container.current?.classList.toggle('far', map.getZoom() < 14.5);
+    const updateFar = () => container.current?.classList.toggle('far', map.getZoom() < 16);
     map.on('zoomend', updateFar);
     updateFar();
     map.on('click', (e) => {
@@ -345,7 +345,7 @@ function placeMarker(p: Poi, date: Date): maplibregl.Marker {
   const el = document.createElement('button');
   el.type = 'button';
   el.className = `place-marker cat-${p.cat}`;
-  el.textContent = PLACE_META[p.cat].icon;
+  // schlichter Punkt statt Emoji: weniger Unruhe auf der Karte; Name und Art stehen im Popup
   el.setAttribute('aria-label', `${placeName(p)}, ${placeKindLabel(p)}, gerade geöffnet`);
   const until = closesAt(p, date);
   const popup = new maplibregl.Popup({ closeButton: false, offset: 14 }).setText(
