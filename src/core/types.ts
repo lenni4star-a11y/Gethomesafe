@@ -60,6 +60,8 @@ export type RawEdge = [
   mlyCoverage?: number,
   /** IDs von Baustellen in der Nähe (siehe extras.json) */
   works?: string[],
+  /** Geschäfte/Lokale im Erdgeschoss direkt am Weg, pro 100 m (unabhängig von Öffnungszeiten; ab Datenstand Nov. 2026) */
+  frontage?: number,
 ];
 
 export interface DistrictFile {
@@ -116,6 +118,8 @@ export interface Edge {
   mlyCoverage: number;
   /** Baustellen in der Nähe (IDs) */
   works: string[];
+  /** Geschäfte/Lokale im Erdgeschoss pro 100 m („Geschäftsstraße“), 0 wenn unbekannt */
+  frontage?: number;
   flags: number;
   /** Punkte von a nach b, inklusive Endpunkte */
   coords: LngLat[];

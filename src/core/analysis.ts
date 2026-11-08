@@ -86,6 +86,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   const workIds = new Set<string>();
   let parkLen = 0;
   let mainLen = 0;
+  let shopLen = 0;
   let tunnels = 0;
 
   // Laufende Abschnitte für Hinweise
@@ -120,6 +121,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     if (ctx.activeWorks) for (const id of e.works) if (ctx.activeWorks.has(id)) workIds.add(id);
     if (e.flags & Flag.Park) parkLen += e.length;
     if (e.kind === WayKind.Main) mainLen += e.length;
+    if ((e.frontage ?? 0) >= 2) shopLen += e.length;
     if (e.flags & Flag.Tunnel) tunnels++;
     for (const p of openPoisNear(e, graph.pois, ctx)) open.set(p.id, p);
 
@@ -205,6 +207,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   if (parkLen >= 100) reasons.push(`${Math.round(parkLen / 10) * 10} m durch Parks`);
   if (tunnels) reasons.push(tunnels === 1 ? '1 Unterführung' : `${tunnels} Unterführungen`);
   if (mainLen / netLen >= 0.5) reasons.push('überwiegend Hauptstraßen');
+  if (shopLen / netLen >= 0.3) reasons.push(`${pct(shopLen / netLen)} % Geschäftsstraße (Schaufenster, Eingänge)`);
 
   return {
     mode: route.mode,

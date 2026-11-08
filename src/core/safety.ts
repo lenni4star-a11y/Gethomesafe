@@ -117,7 +117,17 @@ export function lifeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): n
   const open = openPoisNear(e, pois, ctx);
   if (open.some((p) => p.cat === 'police' || p.cat === 'hospital')) return 0;
   if (open.length >= 2) return 0.2;
-  if (open.length === 1) return 0.5;
+  // Geschäftsstraße: auch geschlossen gibt es Schaufensterlicht, Eingänge und Wohnungen darüber („Augen auf der Straße“)
+  const street = frontageRisk(e);
+  if (open.length === 1) return Math.min(0.5, street);
+  return street;
+}
+
+/** Geschäftsstraße → Risiko für „Belebtheit“, wenn nichts geöffnet hat (1 = keine Geschäfte) */
+export function frontageRisk(e: Edge): number {
+  const f = e.frontage ?? 0;
+  if (f >= 4) return 0.6;
+  if (f >= 2) return 0.8;
   return 1;
 }
 
