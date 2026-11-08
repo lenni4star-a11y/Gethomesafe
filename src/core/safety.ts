@@ -126,8 +126,9 @@ export function lifeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): n
 /** Geschäftsstraße → Risiko für „Belebtheit“, wenn nichts geöffnet hat (1 = keine Geschäfte) */
 export function frontageRisk(e: Edge): number {
   const f = e.frontage ?? 0;
-  if (f >= 4) return 0.6;
-  if (f >= 2) return 0.8;
+  // Schwellen nach echten Daten (Nov. 2026): Neubaugasse ~25, Reindorfgasse ~10, Mariahilfer Str. im 15. ~6 pro 100 m
+  if (f >= 10) return 0.6;
+  if (f >= 5) return 0.8;
   return 1;
 }
 
