@@ -111,6 +111,11 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Phase 4 Rest:** Manifest und App-Symbole sind da (`public/manifest.webmanifest`, `public/icons/`, Links in `index.html`): „Zum Startbildschirm hinzufügen“ öffnet die App ohne Browserleiste. Offen: Service Worker und Offline-Daten, Barrierefreiheit prüfen (Kontraste, Schriftgrößen, Screenreader).
 - **Begleit-Anruf:** Beim Annehmen und beim Start des Zuhörens beginnt die Antwortzeit neu (`callAccepted`), damit das Gespräch nicht mittendrin als „keine Antwort“ abläuft. Gesprochene Antworten wertet `classifyAnswer` (`src/core/escort.ts`, getestet) aus: Verneinungen und Notfall-Wörter gelten immer als „nicht okay“.
 
+## Foto-Pilot (Zustimmung Nov. 2026: „wenn es funktioniert“)
+- Erster Schritt, bewusst ohne Bild-KI-Modell (Lizenzen der gängigen Straßen-Modelle sind meist nicht-kommerziell): `scripts/photo-pilot.py` misst die **Helligkeit von Nachtfotos** (Mapillary, 20–5 Uhr, keine 360°-Fotos, Vorschaubild 256 px) je Wegstück eines Bezirks. Keine Personen-Auswertung.
+- Prüft selbst, ob es funktioniert: Nachtfotos auf laut Daten beleuchteten Wegen müssen deutlich heller sein als auf unbeleuchteten (Tabelle in der Zusammenfassung).
+- Läuft nur über GitHub → Actions → „Foto-Pilot (Test)“ (Bezirk wählbar), Ergebnis als Download unter „Artifacts“. **Fließt nicht in die App ein**, bis die Projektinhaber·in nach Ansicht der Ergebnisse zustimmt; dann höchstens 10 % Gewicht und nur als Lückenfüller.
+
 ## Konzept (nicht umsetzen ohne Zustimmung): KI-Einschätzung aus Straßenfotos
 **Idee:** Aus Mapillary-Fotos (bevorzugt Nachtfotos) ein grobes Maß ableiten, wie sicher sich eine Straße *anfühlen könnte* – ähnlich Projekten wie „Safest Way“ oder Forschung am UCL (Wahrnehmung von Straßenräumen aus Bildern).
 - **Was erkannt würde – nur Ort und Umgebung, nie Menschen:** Helligkeit/Lichtkegel im Nachtfoto, Anzahl sichtbarer Leuchten, Sichtachsen und Einsehbarkeit, Breite des Gehwegs, Bewuchs/Ecken mit Sichtschutz, beleuchtete Schaufenster/Eingänge, Unterführungen. Personen, Gesichter, Kleidung, Gruppen werden **nicht** ausgewertet (Mapillary verpixelt Gesichter ohnehin); keine Kategorien über Personengruppen.
