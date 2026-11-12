@@ -487,9 +487,21 @@ export function App() {
                   <b>ca. {formatDuration((mode === 'ride' ? rideMinutes(start.coords, end.coords) : scooterMinutes(start.coords, end.coords)) * 60)}</b>
                 </button>
               ) : (
-                <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
-                  <Icon name="search" size={18} /> Wohin?
-                </button>
+                <>
+                  {/* Stadtwahl direkt in der Leiste, damit sie am Handy ohne Aufklappen erreichbar ist */}
+                  {cities.length > 1 && (
+                    <select className="city-select chip" aria-label="Stadt wählen" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
+                    <Icon name="search" size={18} /> Wohin?
+                  </button>
+                </>
               )}
               <button type="button" className="icon-btn home-btn" onClick={goHome} aria-label="Nach Hause: sicherste Route planen" title="Nach Hause">
                 <Icon name="home" size={22} />
