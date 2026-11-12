@@ -183,10 +183,16 @@ function zoneCrime(zones) {
 async function overpass(query, file) {
   const target = path.join(RAW, file);
   if (fs.existsSync(target) && !REFRESH) return readJson(target);
-  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']) {
+  const servers = ['https://overpass-api.de/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  for (const url of [...servers, ...servers]) {
     try {
       log('Overpass', url, file);
-      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      const res = await fetch(url, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': 'Goodway-Datenbau/1.0 (+https://github.com/lenni4star-a11y/Gethomesafe)' },
+      });
+      if (res.status === 429 || res.status === 504) await new Promise((r) => setTimeout(r, 20000));
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
       const d = JSON.parse(text);
@@ -234,7 +240,9 @@ async function osmDistricts(id) {
   const cityRing = relationRings(cityRel)[0];
   let out = [];
   for (const level of [c.level, c.level === 10 ? 9 : 10]) {
-    const q = `[out:json][timeout:300];area["boundary"="administrative"]["admin_level"="6"]["name"="${c.osmName}"]->.c;rel(area.c)["boundary"="administrative"]["admin_level"="${level}"];out geom;`;
+    // Abfrage im Rechteck der Stadt (leichter als eine Flächen-Abfrage); Nachbarorte filtert der Mittelpunkt-Test unten
+    const bb = cityRing.reduce((a, p) => [Math.min(a[0], p[1]), Math.min(a[1], p[0]), Math.max(a[2], p[1]), Math.max(a[3], p[0])], [90, 180, -90, -180]);
+    const q = `[out:json][timeout:300];rel["boundary"="administrative"]["admin_level"="${level}"](${bb.map((v) => v.toFixed(4)).join(',')});out geom;`;
     const d = await overpass(q, `${id}-teile-${level}.json`);
     out = d.elements
       .filter((r) => r.type === 'relation' && r.tags?.name)
@@ -1127,7 +1135,24 @@ async function main() {
     extras: null,
     mapillary: false,
   };
-  for (const city of CITIES) await buildCity(city, acc);
+  for (const city of CITIES) {
+    if (!OSM_CITY[city.id]) {
+      await buildCity(city, acc);
+      continue;
+    }
+    // neue Städte: ein Fehler (z. B. Overpass nicht erreichbar) soll den Rest nicht aufhalten
+    const before = { b: acc.index.bezirke.length, c: acc.index.cities.length, s: acc.stops.length, a: acc.index.attribution.length };
+    try {
+      await buildCity(city, acc);
+    } catch (e) {
+      log(`!! ${city.name} übersprungen:`, e.message);
+      acc.index.bezirke.length = before.b;
+      acc.index.cities.length = before.c;
+      acc.stops.length = before.s;
+      acc.index.attribution.length = before.a;
+      delete acc.places[city.id];
+    }
+  }
   if (acc.mapillary) acc.index.attribution.push('Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)');
   fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(acc.index));
   fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(acc.stops));
