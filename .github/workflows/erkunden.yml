@@ -7,28 +7,12 @@ jobs:
   look:
     runs-on: ubuntu-latest
     steps:
-      - name: Katalog data.linz.gv.at (mehrere Ebenen)
+      - name: Bezirke
         run: |
-          python3 - <<'PY'
-          import re, urllib.request
-          base = "https://data.linz.gv.at/katalog/"
-          def ls(url):
-              try:
-                  html = urllib.request.urlopen(url, timeout=30).read().decode("utf8", "ignore")
-              except Exception as e:
-                  return []
-              return [h for h in re.findall(r'href="(\./[^"]+)"', html)]
-          def walk(url, depth):
-              for h in ls(url):
-                  u = url + h[2:]
-                  if h.endswith("/"):
-                      if depth < 4:
-                          walk(u, depth + 1)
-                  else:
-                      print(u.replace(base, ""))
-          for top in ["geodata/", "verkehr/", "linz_ag/", "stadt/", "linz_service/", "population/", "externe_daten/", "umwelt/", "Freizeit/"]:
-              walk(base + top, 1)
-          PY
-      - name: Overpass Linz Grenzen
-        run: |
-          curl -s -m 120 --data-urlencode 'data=[out:json][timeout:90];rel["name"="Linz"]["boundary"="administrative"];map_to_area->.a;rel(area.a)["boundary"="administrative"];out tags;' https://overpass-api.de/api/interpreter | head -c 5000
+          B=https://data.linz.gv.at/katalog/geodata
+          curl -sL $B/statistisch_bezirke/2014/StatBez_Linz_EPSG_4326.gml -o g.gml; ls -la g.gml; head -c 2500 g.gml; echo; echo ...
+          grep -oE '<[A-Za-z_:]+' g.gml | sort | uniq -c | sort -rn | head -30
+          curl -sL $B/statistisch_bezirke/2014/statistische_bezirke.csv | head -25
+          curl -sL $B/bezirke/Statistische_Bezirke_20250428.zip -o b.zip; unzip -l b.zip
+      - name: WCs
+        run: curl -sL "https://data.linz.gv.at/katalog/Freizeit/toiletten/WC_Anlagen.csv" | head -8
