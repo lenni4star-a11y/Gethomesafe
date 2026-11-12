@@ -45,6 +45,7 @@ import { RouteOverview } from './components/RouteOverview';
 import { FeelMeter, RidePanel, rideMinutes, ScooterPanel, scooterMinutes, type TravelMode } from './components/TravelModes';
 import { emergencyText } from '../core/helplines';
 import { setCurrentCity } from './region';
+import { rememberCityCenter } from './mapStyle';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
 type SheetState = 'collapsed' | 'half' | 'full';
@@ -106,6 +107,7 @@ export function App() {
   const cities = useMemo(() => planner?.index.cities ?? [{ id: 'berlin', name: 'Berlin', transit: true, lamps: true, bbox: [13.09, 52.34, 13.76, 52.68] as [number, number, number, number] }], [planner]);
   const cityInfo = cities.find((c) => c.id === city) ?? cities[0];
   setCurrentCity(cityInfo.id);
+  rememberCityCenter((cityInfo.bbox[1] + cityInfo.bbox[3]) / 2, (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2);
 
   const bbox = useMemo<[number, number, number, number]>(() => {
     if (!planner) return [13.09, 52.34, 13.76, 52.68];

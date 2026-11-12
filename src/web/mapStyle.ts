@@ -1,19 +1,23 @@
-// Kartenstil: „hell“ (bunt wie Google Maps, Standard) oder „dunkel“ (blendet nachts weniger).
-// Beides freie Stile von OpenFreeMap (kein Account). Gespeichert nur im Gerät (localStorage).
+// Kartenstil: „automatisch“ (Standard: tagsüber hell, nach Sonnenuntergang dunkel), „hell“ (bunt wie Google Maps)
+// oder „dunkel“ (blendet nachts weniger). Freie Stile von OpenFreeMap (kein Account). Gespeichert nur im Gerät (localStorage).
 
-export type MapStyleChoice = 'hell' | 'dunkel';
+import { isDark } from '../core/sun';
 
-const KEY = 'goodway.mapStyle';
-const URLS: Record<MapStyleChoice, string> = {
+export type MapStyleChoice = 'auto' | 'hell' | 'dunkel';
+
+const KEY = 'goodway.mapStyle.v2'; // neu ab Nov. 2026: alle starten mit „automatisch“
+const CENTER_KEY = 'goodway.cityCenter';
+const URLS = {
   hell: 'https://tiles.openfreemap.org/styles/liberty',
   dunkel: 'https://tiles.openfreemap.org/styles/dark',
 };
 
 export function getMapStyle(): MapStyleChoice {
   try {
-    return localStorage.getItem(KEY) === 'dunkel' ? 'dunkel' : 'hell';
+    const v = localStorage.getItem(KEY);
+    return v === 'dunkel' || v === 'hell' ? v : 'auto';
   } catch {
-    return 'hell';
+    return 'auto';
   }
 }
 
@@ -25,6 +29,33 @@ export function setMapStyle(choice: MapStyleChoice): void {
   }
 }
 
+/** Mitte der gewählten Stadt merken, damit „automatisch“ beim nächsten Start den richtigen Sonnenuntergang nimmt */
+export function rememberCityCenter(lat: number, lon: number): void {
+  try {
+    localStorage.setItem(CENTER_KEY, `${lat.toFixed(2)},${lon.toFixed(2)}`);
+  } catch {
+    /* egal */
+  }
+}
+
+function cityCenter(): [number, number] {
+  try {
+    const [lat, lon] = (localStorage.getItem(CENTER_KEY) ?? '').split(',').map(Number);
+    if (lat && lon) return [lat, lon];
+  } catch {
+    /* egal */
+  }
+  return [52.52, 13.4]; // Berlin
+}
+
+/** Ist es gerade dunkel (für den automatischen Kartenstil)? */
+export function darkNow(date = new Date()): boolean {
+  const [lat, lon] = cityCenter();
+  return isDark(date, lat, lon);
+}
+
 export function mapStyleUrl(): string {
-  return URLS[getMapStyle()];
+  const c = getMapStyle();
+  if (c === 'auto') return darkNow() ? URLS.dunkel : URLS.hell;
+  return URLS[c];
 }
