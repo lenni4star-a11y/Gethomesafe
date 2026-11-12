@@ -83,8 +83,8 @@ function ymd(d) {
 
 async function main() {
   const index = JSON.parse(fs.readFileSync(path.join(OUT, 'index.json'), 'utf8'));
-  // Gebiet: alle Bezirke aus dem Datenbau plus 500 m Rand
-  const all = index.bezirke.reduce((a, b) => [Math.min(a[0], b.bbox[0]), Math.min(a[1], b.bbox[1]), Math.max(a[2], b.bbox[2]), Math.max(a[3], b.bbox[3])], [180, 90, -180, -90]);
+  // Gebiet: alle Wiener Bezirke aus dem Datenbau plus 500 m Rand (der Fahrplan gilt nur für Wien)
+  const all = index.bezirke.filter((b) => (b.city ?? 'wien') === 'wien').reduce((a, b) => [Math.min(a[0], b.bbox[0]), Math.min(a[1], b.bbox[1]), Math.max(a[2], b.bbox[2]), Math.max(a[3], b.bbox[3])], [180, 90, -180, -90]);
   const AREA = [all[0] - 500 / MX, all[1] - 500 / MY, all[2] + 500 / MX, all[3] + 500 / MY];
   const inArea = (lon, lat) => lon >= AREA[0] && lon <= AREA[2] && lat >= AREA[1] && lat <= AREA[3];
 

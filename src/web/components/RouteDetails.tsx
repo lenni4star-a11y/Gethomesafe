@@ -112,7 +112,8 @@ export function RouteDetails({ route, date, onFocus }: Props) {
         <ul className="sources">
           {route.dark && (
             <li>
-              Beleuchtung: {Math.round(route.litSources.osm * 100)} % laut OpenStreetMap, {Math.round(route.litSources.stadt * 100)} % laut Leuchtenstandorten der Stadt Wien,{' '}
+              Beleuchtung: {Math.round(route.litSources.osm * 100)} % laut OpenStreetMap,{' '}
+              {route.litSources.stadt > 0 ? `${Math.round(route.litSources.stadt * 100)} % laut Leuchtenstandorten der Stadt Wien, ` : ''}
               {Math.round(route.litSources.mapillary * 100)} % Laternen auf Mapillary-Fotos erkannt (schwächer gewichtet).
             </li>
           )}
@@ -185,7 +186,7 @@ function OpenPlaces({ places, date, onFocus }: { places: Poi[]; date: Date; onFo
         </details>
       ))}
       <p className="fineprint">
-        Laut Öffnungszeiten in OpenStreetMap, Öffi-Stationen laut ungefähren Betriebszeiten der Wiener Linien. Orte ohne Öffnungszeiten zählen wir nicht mit.
+        Laut Öffnungszeiten in OpenStreetMap, Öffi-Stationen laut ungefähren Betriebszeiten der Verkehrsbetriebe (Wiener Linien, LINZ AG LINIEN). Orte ohne Öffnungszeiten zählen wir nicht mit.
       </p>
     </section>
   );

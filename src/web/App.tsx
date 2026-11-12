@@ -6,7 +6,7 @@ import type { RouteMode } from '../core/routing';
 export type Selection = RouteMode | 'transit';
 import { DEFAULT_SETTINGS, withDefaults, type Settings } from '../core/settings';
 import { isDark } from '../core/sun';
-import type { LngLat } from '../core/types';
+import { cityOf, type LngLat } from '../core/types';
 import type { Contact } from '../core/contacts';
 import { distance, remainingAlong } from '../core/geo';
 import { WALK_SPEED } from '../core/routing';
@@ -83,6 +83,8 @@ export function App() {
   const [streetAt, setStreetAt] = useState<LngLat | null>(null);
   const [home, setHome] = useStored<Place | null>('home', null);
   const [favorites, setFavorites] = useStored<Place[]>('favorites', []);
+  /** gewählte Stadt (Wien, Linz …): bestimmt Kartenausschnitt, Suche und regionale Hilfsstellen */
+  const [city, setCity] = useStored<string>('city', 'wien');
   const [homePromptDone, setHomePromptDone] = useStored<boolean>('homePromptDone', false);
   const [onboardingDone, setOnboardingDone, onboardingLoaded] = useStored<boolean>('onboardingDone', false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -95,11 +97,25 @@ export function App() {
       .catch(() => setMessage('Die Kartendaten konnten nicht geladen werden. Bitte Seite neu laden.'));
   }, []);
 
+  const cities = useMemo(() => planner?.index.cities ?? [{ id: 'wien', name: 'Wien', transit: true, lamps: true, bbox: [16.28, 48.17, 16.43, 48.24] as [number, number, number, number] }], [planner]);
+  const cityInfo = cities.find((c) => c.id === city) ?? cities[0];
+
   const bbox = useMemo<[number, number, number, number]>(() => {
     if (!planner) return [16.28, 48.17, 16.43, 48.24];
-    const b = planner.index.bezirke.filter((x) => !x.transit);
+    const b = planner.index.bezirke.filter((x) => !x.transit && cityOf(x) === cityInfo.id);
+    if (!b.length) return cityInfo.bbox;
     return [Math.min(...b.map((x) => x.bbox[0])), Math.min(...b.map((x) => x.bbox[1])), Math.max(...b.map((x) => x.bbox[2])), Math.max(...b.map((x) => x.bbox[3]))];
-  }, [planner]);
+  }, [planner, cityInfo]);
+
+  /** Stadt wechseln: Start und Ziel aus der anderen Stadt verwerfen */
+  const changeCity = (id: string) => {
+    if (id === city) return;
+    setCity(id);
+    setStart(null);
+    setEnd(null);
+    setPlan(null);
+    setMessage(null);
+  };
 
   const time = customTime ?? new Date();
   const dark = isDark(time);
@@ -118,15 +134,26 @@ export function App() {
       setPlan(null);
       return;
     }
+    const dStart = planner.districtAt(start.coords);
+    const dEnd = planner.districtAt(end.coords);
     const outside = [start, end].filter((p) => !planner.districtAt(p.coords));
     if (outside.length) {
       setPlan(null);
+      const here = dStart ?? dEnd;
+      const listCity = here ? cityOf(here) : cityInfo.id;
       setMessage(
         `${outside.map((p) => (p === start ? 'Der Start' : 'Das Ziel')).join(' und ')} liegt außerhalb des Pilotgebiets. ` +
-          `Im Moment gibt es Daten für: ${planner.index.bezirke.filter((b) => !b.transit).map((b) => b.name).join(', ')}.`,
+          `Im Moment gibt es Daten für ${cities.find((c) => c.id === listCity)?.name ?? 'Wien'}: ${planner.index.bezirke.filter((b) => !b.transit && cityOf(b) === listCity).map((b) => b.name).join(', ')}.`,
       );
       return;
     }
+    if (dStart && dEnd && cityOf(dStart) !== cityOf(dEnd)) {
+      setPlan(null);
+      setMessage('Start und Ziel liegen in verschiedenen Städten. Die App plant nur Wege innerhalb einer Stadt.');
+      return;
+    }
+    // Start und Ziel in einer anderen Stadt (z. B. über den eigenen Standort): Stadt mitwechseln
+    if (dStart && cityOf(dStart) !== city) setCity(cityOf(dStart));
     let cancelled = false;
     const when = customTime ?? new Date();
     setBusy(true);
@@ -148,7 +175,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime, settings.parkAvoidance, ratings]);
+  }, [planner, start, end, customTime, settings.parkAvoidance, ratings, city]);
 
   // Bewertungen auf der Karte, gefiltert nach Wochentag und Uhrzeit
   const ratingTime = customTime ?? new Date();
@@ -307,11 +334,20 @@ export function App() {
 
   return (
     <div className="app">
-      <MapView ref={map} index={planner?.index ?? null} onMapClick={onMapClick} />
+      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} />
 
       <header className="topbar">
         <Wordmark />
-        <span className="badge">Prototyp</span>
+        {cities.length > 1 ? (
+          <select className="badge city-select" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <span className="badge proto">Prototyp</span>
       </header>
       <button type="button" className="settings-btn" onClick={() => setShowSettings(true)} aria-label="Einstellungen">
         <Icon name="settings" size={22} />
@@ -496,7 +532,7 @@ export function App() {
                     return (
                       <button key={m} type="button" role="radio" aria-checked={false} disabled className="route-card unavailable">
                         <span className="rc-title">Mit Öffis</span>
-                        <span className="rc-meta">{plan.fastest.seconds < 5 * 60 ? 'Weg zu kurz' : 'keine Verbindung gefunden'}</span>
+                        <span className="rc-meta">{plan.fastest.seconds < 5 * 60 ? 'Weg zu kurz' : !cityInfo.transit ? `Fahrplan für ${cityInfo.name} fehlt noch` : 'keine Verbindung gefunden'}</span>
                       </button>
                     );
                   return (
@@ -652,6 +688,7 @@ export function App() {
             else setFakeAt(Date.now() + delay * 1000);
           }}
           lastPosition={escort.lastPos}
+          city={cityInfo.id}
           onAlarm={() => {
             unlockAudio();
             setShowSos(false);

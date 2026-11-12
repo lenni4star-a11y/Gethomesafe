@@ -15,17 +15,19 @@ const STOP_LABEL: Record<Stop['type'], string> = { ubahn: 'U-Bahn', sbahn: 'S-Ba
 
 const norm = (s: string) => s.toLocaleLowerCase('de').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
 
-export async function searchStops(q: string): Promise<Place[]> {
+/** Haltestellen suchen; mit bbox nur in der gewählten Stadt (sonst gäbe es z. B. „Hauptbahnhof“ doppelt) */
+export async function searchStops(q: string, bbox?: [number, number, number, number]): Promise<Place[]> {
   const n = norm(q.trim());
   if (n.length < 2) return [];
   const stops = await getStops();
+  const inBox = (s: Stop) => !bbox || (s.lon >= bbox[0] - 0.02 && s.lon <= bbox[2] + 0.02 && s.lat >= bbox[1] - 0.02 && s.lat <= bbox[3] + 0.02);
   return stops
-    .filter((s) => norm(s.name).includes(n))
+    .filter((s) => inBox(s) && norm(s.name).includes(n))
     .sort((a, b) => Number(!norm(a.name).startsWith(n)) - Number(!norm(b.name).startsWith(n)) || a.type.localeCompare(b.type))
     .slice(0, 4)
     .map((s) => ({
       label: s.name,
-      detail: `${STOP_LABEL[s.type]} · ${s.lines.slice(0, 6).join(', ')}${s.lines.length > 6 ? ' …' : ''}`,
+      detail: s.lines.length ? `${STOP_LABEL[s.type]} · ${s.lines.slice(0, 6).join(', ')}${s.lines.length > 6 ? ' …' : ''}` : `Haltestelle (${STOP_LABEL[s.type]})`,
       coords: [s.lon, s.lat] as LngLat,
       kind: 'stop' as const,
     }));

@@ -6,7 +6,7 @@ import { along, bearing, lineLength, turnAngle } from '../../core/geo';
 import { closesAt } from '../../core/openingHours';
 import type { PlanResult } from '../../core/planner';
 import type { Selection } from '../App';
-import type { DataIndex, LngLat, Poi } from '../../core/types';
+import { cityOf, type DataIndex, type LngLat, type Poi } from '../../core/types';
 import { placeKindLabel, placeName } from '../places';
 import { mapStyleUrl } from '../mapStyle';
 
@@ -41,12 +41,14 @@ export interface MapHandle {
 
 interface Props {
   index: DataIndex | null;
+  /** gewählte Stadt: Karte zeigt deren Pilotgebiet */
+  city?: string;
   onMapClick: (p: LngLat) => void;
 }
 
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, onMapClick }, ref) {
+export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, city = 'wien', onMapClick }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const ready = useRef<Promise<void>>();
@@ -73,7 +75,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
     map.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: 'Daten: © OpenStreetMap-Mitwirkende, Stadt Wien – data.wien.gv.at',
+        customAttribution: 'Daten: © OpenStreetMap-Mitwirkende, Stadt Wien – data.wien.gv.at, Stadt Linz – data.linz.gv.at',
       }),
       'bottom-right',
     );
@@ -181,7 +183,8 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
     if (!index) return;
     ready.current?.then(() => {
       const map = mapRef.current!;
-      const pilot = index.bezirke.filter((b) => !b.transit);
+      const pilot = index.bezirke.filter((b) => !b.transit && cityOf(b) === city);
+      if (!pilot.length) return;
       (map.getSource('area') as GeoJSONSource).setData({
         type: 'FeatureCollection',
         features: pilot.map((b) => ({
@@ -199,7 +202,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, on
         duration: 0,
       });
     });
-  }, [index]);
+  }, [index, city]);
 
   useImperativeHandle(ref, () => ({
     showPlan(plan, selected, date) {

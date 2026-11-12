@@ -1,12 +1,13 @@
 // Baut die Kartendaten für die App.
 //
 // Was passiert hier?
-// 1. Die Bezirksliste wird aus config/gebiet.json gelesen.
+// 1. Die Bezirksliste wird aus config/gebiet.json gelesen (Wien und Linz).
 // 2. Rohdaten werden geladen (und in data-raw/ zwischengespeichert):
-//    - OpenStreetMap-Export für Wien (BBBike, wöchentlich aktualisiert)
-//    - Stadt Wien Open Data: Bezirksgrenzen, Leuchtenstandorte, Öffi-Haltestellen
+//    - OpenStreetMap-Export für Wien und Linz (BBBike, wöchentlich aktualisiert)
+//    - Stadt Wien Open Data: Bezirksgrenzen, Leuchtenstandorte, Öffi-Haltestellen, Polizei, Taxi, WCs, Baustellen
+//    - Stadt Linz Open Data: Grenzen der statistischen Bezirke (Haltestellen in Linz aus OpenStreetMap)
 // 3. Daraus wird ein Fußwege-Netz gebaut und pro Bezirk eine Datei
-//    public/data/bezirk-XX.json geschrieben, dazu ein Inhaltsverzeichnis index.json.
+//    public/data/bezirk-XX.json (Wien) bzw. linz-XX.json (Linz) geschrieben, dazu ein Inhaltsverzeichnis index.json.
 //
 // Aufruf: npm run data   (Rohdaten neu laden: npm run data -- --refresh)
 
@@ -36,11 +37,16 @@ function readToken() {
 const MLY_TOKEN = readToken();
 
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'gebiet.json'), 'utf8'));
-const PILOT = config.bezirke.map(Number);
-const TRANSIT = (config.durchgang ?? []).map(Number).filter((n) => !PILOT.includes(n));
-const BEZIRKE = [...PILOT, ...TRANSIT];
 
-const PBF_URL = 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf';
+// Städte. Bezirksnummern in der App: Wien 1–23, Linz 101–116 (= 100 + Nummer des statistischen Bezirks)
+const CITIES = [
+  { id: 'wien', name: 'Wien', pilot: config.bezirke, durchgang: config.durchgang ?? [], offset: 0, prefix: 'bezirk' },
+  ...(config.linz ? [{ id: 'linz', name: 'Linz', pilot: config.linz.bezirke, durchgang: config.linz.durchgang ?? [], offset: 100, prefix: 'linz' }] : []),
+];
+
+const PBF_URL = { wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf', linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf' };
+const LINZ_GML = 'https://data.linz.gv.at/katalog/geodata/statistisch_bezirke/2014/StatBez_Linz_EPSG_4326.gml';
+const LINZ_NAMES = ['Innere Stadt', 'Urfahr', 'Pöstlingberg', 'St. Magdalena', 'Dornach-Auhof', 'Kaplanhof', 'Franckviertel', 'Bulgariplatz', 'Froschberg', 'Bindermichl-Keferfeld', 'Spallerhof', 'Neue Heimat', 'Kleinmünchen-Auwiesen', 'Industriegebiet-Hafen', 'Ebelsberg', 'Pichling'];
 const WFS = 'https://data.wien.gv.at/daten/geo?service=WFS&request=GetFeature&version=1.1.0&srsName=EPSG:4326&outputFormat=json&typeName=ogdwien:';
 
 // ---------------------------------------------------------------- Hilfen
@@ -224,24 +230,54 @@ const FRONT_RADIUS = 20;
 
 // ---------------------------------------------------------------- Ablauf
 
-async function main() {
-  fs.mkdirSync(RAW, { recursive: true });
-  fs.mkdirSync(OUT, { recursive: true });
+/** Grenzen der statistischen Bezirke von Linz (Stadt Linz, data.linz.gv.at, GML in WGS84) */
+async function linzDistricts() {
+  const gml = fs.readFileSync(await download(LINZ_GML, 'linz-bezirke.gml'), 'utf8');
+  const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
+  const out = [];
+  for (const m of gml.matchAll(/<gml:featureMember>([\s\S]*?)<\/gml:featureMember>/g)) {
+    const body = m[1];
+    const field = (name) => body.match(new RegExp(`<ogr:${name}>\\s*([^<]*?)\\s*</ogr:${name}>`))?.[1] ?? null;
+    const label = field('Bezeichung') ?? field('Bezeichnung') ?? field('STBn') ?? '';
+    let nr = LINZ_NAMES.findIndex((n) => norm(n) === norm(label)) + 1;
+    if (!nr) nr = Number(field('Stb')) || Number(field('STBn')) || 0;
+    const rings = [...body.matchAll(/<gml:coordinates>([^<]+)<\/gml:coordinates>/g)].map((r) =>
+      r[1].trim().split(/\s+/).map((t) => t.split(',').slice(0, 2).map(Number)),
+    );
+    if (!nr || !rings.length) {
+      log('  Linz: Bezirk nicht erkannt:', label, field('Stb'));
+      continue;
+    }
+    // größter Ring = Außengrenze
+    rings.sort((a, b) => b.length - a.length);
+    out.push({ nr, name: LINZ_NAMES[nr - 1] ?? label, poly: [rings[0]] });
+  }
+  if (out.length < 16) log('  Achtung: nur', out.length, 'Linzer Bezirke erkannt');
+  return out;
+}
+
+async function buildCity(city, acc) {
+  const PILOT = city.pilot.map(Number);
+  const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
+  const BEZIRKE = [...PILOT, ...TRANSIT];
+  log(`===== ${city.name} =====`);
 
   // 1. Bezirksgrenzen
-  const bezFile = await download(WFS + 'BEZIRKSGRENZEOGD', 'bezirke.json');
-  const bezirke = readJson(bezFile)
-    .features.filter((f) => BEZIRKE.includes(f.properties.BEZNR))
-    .map((f) => ({
+  let raw;
+  if (city.id === 'wien') {
+    raw = readJson(await download(WFS + 'BEZIRKSGRENZEOGD', 'bezirke.json')).features.map((f) => ({
       nr: f.properties.BEZNR,
       name: f.properties.NAMEK,
-      transit: TRANSIT.includes(f.properties.BEZNR),
       poly: f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates[0],
     }));
-  const missing = BEZIRKE.filter((n) => !bezirke.some((b) => b.nr === n));
-  if (missing.length) throw new Error('Unbekannte Bezirksnummern in config/gebiet.json: ' + missing.join(', '));
+  } else raw = await linzDistricts();
+  const bezirke = raw
+    .filter((b) => BEZIRKE.includes(b.nr))
+    .map((b) => ({ ...b, local: b.nr, nr: b.nr + city.offset, transit: TRANSIT.includes(b.nr) }));
+  const missing = BEZIRKE.filter((n) => !bezirke.some((b) => b.local === n));
+  if (missing.length) throw new Error(`Unbekannte Bezirksnummern für ${city.name} in config/gebiet.json: ` + missing.join(', '));
   for (const b of bezirke) b.bbox = bboxOf(b.poly[0]);
-  log('Bezirke:', bezirke.map((b) => `${b.nr}. ${b.name}`).join(', '));
+  log('Bezirke:', bezirke.map((b) => `${b.local}. ${b.name}`).join(', '));
 
   const pad = 400; // Meter Rand um das Gebiet
   const all = bboxOf(bezirke.flatMap((b) => [[b.bbox[0], b.bbox[1]], [b.bbox[2], b.bbox[3]]]));
@@ -252,17 +288,19 @@ async function main() {
   for (const b of bezirke) bezGrid.addBox(b.bbox, b);
   const bezirkAt = (pt) => bezGrid.at(pt[0], pt[1]).find((b) => pointInPolygon(pt, b.poly));
 
-  // 2. Leuchten der Stadt Wien
-  const lampFile = await download(WFS + 'LAMPENTAUSCHOGD&propertyName=SHAPE', 'leuchten.json');
+  // 2. Leuchten der Stadt Wien (für Linz gibt es keine offenen Leuchtenstandorte)
   const lampGrid = new Grid(25);
   let lampCount = 0;
-  for (const f of readJson(lampFile).features) {
-    const [lon, lat] = f.geometry.coordinates;
-    if (!inArea(lon, lat)) continue;
-    lampGrid.add(lon, lat, [lon, lat]);
-    lampCount++;
+  if (city.id === 'wien') {
+    const lampFile = await download(WFS + 'LAMPENTAUSCHOGD&propertyName=SHAPE', 'leuchten.json');
+    for (const f of readJson(lampFile).features) {
+      const [lon, lat] = f.geometry.coordinates;
+      if (!inArea(lon, lat)) continue;
+      lampGrid.add(lon, lat, [lon, lat]);
+      lampCount++;
+    }
   }
-  log('Leuchten im Gebiet:', lampCount);
+  log('Leuchten der Stadt im Gebiet:', lampCount);
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);
@@ -302,14 +340,15 @@ async function main() {
   } else log('Kein Mapillary-Token: erkannte Laternen werden übersprungen.');
 
   // 2c. Weitere Daten der Stadt Wien: Polizei, Taxistandplätze, öffentliche WCs, Baustellen
-  const wienPolice = readJson(await download(WFS + 'POLIZEIOGD', 'polizei.json')).features.filter((f) => inArea(...f.geometry.coordinates));
-  const taxi = readJson(await download(WFS + 'TAXIOGD', 'taxi.json'))
+  const isWien = city.id === 'wien';
+  const wienPolice = !isWien ? [] : readJson(await download(WFS + 'POLIZEIOGD', 'polizei.json')).features.filter((f) => inArea(...f.geometry.coordinates));
+  const taxi = !isWien ? [] : readJson(await download(WFS + 'TAXIOGD', 'taxi.json'))
     .features.map((f) => {
       const c = f.geometry.type === 'Point' ? f.geometry.coordinates : f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)];
       return { lon: +c[0].toFixed(5), lat: +c[1].toFixed(5), address: f.properties.ADRESSE, spaces: f.properties.STELLPLATZANZAHL ?? null };
     })
     .filter((t) => inArea(t.lon, t.lat));
-  const wc = readJson(await download(WFS + 'WCANLAGE2OGD', 'wc.json'))
+  const wc = !isWien ? [] : readJson(await download(WFS + 'WCANLAGE2OGD', 'wc.json'))
     .features.filter((f) => f.properties.AKTIV_TXT !== 'NEIN')
     .map((f) => ({
       lon: +f.geometry.coordinates[0].toFixed(5),
@@ -322,7 +361,7 @@ async function main() {
     .filter((w) => inArea(w.lon, w.lat));
   // Baustellen ändern sich laufend: immer frisch laden
   const worksRaw = [];
-  for (const layer of ['BAUSTELLENLINOGD', 'BAUSTELLENPKTOGD']) {
+  for (const layer of isWien ? ['BAUSTELLENLINOGD', 'BAUSTELLENPKTOGD'] : []) {
     const res = await fetch(WFS + layer);
     if (!res.ok) continue;
     for (const f of (await res.json()).features) {
@@ -348,59 +387,70 @@ async function main() {
       for (let k = 0; k < n; k++) worksGrid.add(a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, { id: w.id, at: [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n] });
     }
   }
-  log(`Stadt Wien: ${wienPolice.length} Polizei, ${taxi.length} Taxistandplätze, ${wc.length} WCs, ${worksRaw.length} Baustellen im Gebiet`);
+  if (isWien) log(`Stadt Wien: ${wienPolice.length} Polizei, ${taxi.length} Taxistandplätze, ${wc.length} WCs, ${worksRaw.length} Baustellen im Gebiet`);
 
-  // 3. Öffi-Haltestellen
-  const stopFile = await download(WFS + 'OEFFHALTESTOGD', 'haltestellen.json');
-  const LTYP = { 4: 'ubahn', 5: 'sbahn', 1: 'tram', 2: 'bus', 3: 'bus', 9: 'tram', 10: 'bus', 11: 'bus', 12: 'bus', 13: 'bus' };
+  // 3. Öffi-Haltestellen: Wien aus den Daten der Stadt, Linz aus OpenStreetMap (siehe OSM-Durchlauf 3)
   const PRIO = { ubahn: 0, sbahn: 1, tram: 2, bus: 3 };
   const stopsByName = new Map();
-  for (const f of readJson(stopFile).features) {
-    const p = f.properties;
-    const [lon, lat] = f.geometry.coordinates;
-    if (!inArea(lon, lat)) continue;
+  const addStop = (name, lon, lat, type, lines) => {
+    if (!name || !inArea(lon, lat)) return;
     const b = bezirkAt([lon, lat]);
-    if (!b || b.transit) continue;
-    const type = LTYP[p.LTYP] ?? 'bus';
-    const lines = (p.HLINIEN ?? '').split(',').map((l) => l.trim()).filter(Boolean);
+    if (!b || b.transit) return;
     // Gleichnamige Haltestellen in der Nähe zusammenfassen
-    const key = p.HTXT;
-    let list = stopsByName.get(key);
-    if (!list) stopsByName.set(key, (list = []));
+    let list = stopsByName.get(name);
+    if (!list) stopsByName.set(name, (list = []));
     let s = list.find((x) => dist([x.lon, x.lat], [lon, lat]) < 300);
-    if (!s) list.push((s = { name: p.HTXT, lon, lat, type, lines: new Set(), bezirk: b.nr, n: 0, sx: 0, sy: 0 }));
+    if (!s) list.push((s = { name, lon, lat, type, lines: new Set(), bezirk: b.nr, n: 0, sx: 0, sy: 0 }));
     if (PRIO[type] < PRIO[s.type]) s.type = type;
     lines.forEach((l) => s.lines.add(l));
     s.n++;
     s.sx += lon;
     s.sy += lat;
-  }
-  const stops = [...stopsByName.values()].flat().map((s, i) => {
-    const lines = [...s.lines].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
-    return {
-      id: 'st' + i,
-      name: s.name,
-      type: s.type,
-      lines,
-      night: lines.some((l) => /^N\d/.test(l) || /^U\d$/.test(l)),
-      bezirk: s.bezirk,
-      lon: +(s.sx / s.n).toFixed(5),
-      lat: +(s.sy / s.n).toFixed(5),
-    };
-  });
-  log('Haltestellen:', stops.length);
-
-  // Ungefähre Betriebszeiten der Wiener Linien (vereinfacht, ohne Feiertage):
-  // U-Bahn bis ca. 0:30, in Nächten vor Samstag, Sonntag durchgehend; Nachtlinien ca. 0:30–5:00.
-  const STOP_HOURS = {
-    ubahn: 'Mo-Fr 05:00-24:00; Sa,Su 00:00-24:00; Mo-Fr 00:00-00:30',
-    sbahn: 'Mo-Su 04:30-24:00; Mo-Su 00:00-00:30',
-    tram: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
-    bus: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
   };
+  if (isWien) {
+    const stopFile = await download(WFS + 'OEFFHALTESTOGD', 'haltestellen.json');
+    const LTYP = { 4: 'ubahn', 5: 'sbahn', 1: 'tram', 2: 'bus', 3: 'bus', 9: 'tram', 10: 'bus', 11: 'bus', 12: 'bus', 13: 'bus' };
+    for (const f of readJson(stopFile).features) {
+      const p = f.properties;
+      const [lon, lat] = f.geometry.coordinates;
+      addStop(p.HTXT, lon, lat, LTYP[p.LTYP] ?? 'bus', (p.HLINIEN ?? '').split(',').map((l) => l.trim()).filter(Boolean));
+    }
+  }
+  const finishStops = () =>
+    [...stopsByName.values()].flat().map((s, i) => {
+      const lines = [...s.lines].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+      return {
+        id: (isWien ? 'st' : `${city.id}-st`) + i,
+        name: s.name,
+        type: s.type,
+        lines,
+        night: lines.some((l) => /^N\d/.test(l) || (isWien && /^U\d$/.test(l))),
+        bezirk: s.bezirk,
+        city: city.id,
+        lon: +(s.sx / s.n).toFixed(5),
+        lat: +(s.sy / s.n).toFixed(5),
+      };
+    });
+
+  // Ungefähre Betriebszeiten (vereinfacht, ohne Feiertage).
+  // Wien: U-Bahn bis ca. 0:30, in Nächten vor Samstag, Sonntag durchgehend; Nachtlinien ca. 0:30–5:00.
+  // Linz: Straßenbahn und Bus ca. 5:00–0:30 (Nachtlinien am Wochenende hier nicht berücksichtigt).
+  const STOP_HOURS = isWien
+    ? {
+        ubahn: 'Mo-Fr 05:00-24:00; Sa,Su 00:00-24:00; Mo-Fr 00:00-00:30',
+        sbahn: 'Mo-Su 04:30-24:00; Mo-Su 00:00-00:30',
+        tram: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+        bus: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+      }
+    : {
+        ubahn: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+        sbahn: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+        tram: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+        bus: 'Mo-Su 05:00-24:00; Mo-Su 00:00-00:30',
+      };
 
   // 4. OpenStreetMap in drei Durchläufen
-  const pbf = await download(PBF_URL, 'Wien.osm.pbf');
+  const pbf = await download(PBF_URL[city.id], `${city.name}.osm.pbf`);
 
   log('OSM 1/3: Relationen (große Parks)');
   const greenRelWays = new Map(); // wayId -> relationId
@@ -454,8 +504,16 @@ async function main() {
       const cat = poiCategory(item.tags);
       if (cat) pois.push({ id: 'n' + item.id, cat, t: item.tags, lon: item.lon, lat: item.lat });
       if (isFrontage(item.tags)) frontPts.push([item.lon, item.lat]);
+      // Linz: Haltestellen aus OpenStreetMap
+      const t = item.tags;
+      if (!isWien && t.name && (t.highway === 'bus_stop' || t.railway === 'tram_stop' || t.public_transport === 'platform' || t.railway === 'station' || t.railway === 'halt')) {
+        const type = t.railway === 'station' || t.railway === 'halt' || t.train === 'yes' ? 'sbahn' : t.railway === 'tram_stop' || t.tram === 'yes' ? 'tram' : 'bus';
+        addStop(t.name, item.lon, item.lat, type, (t.route_ref ?? '').split(/[;,]/).map((l) => l.trim()).filter(Boolean));
+      }
     }
   }
+  const stops = finishStops();
+  log('Haltestellen:', stops.length);
   for (const refs of frontWays) {
     const pts = refs.map((r) => coord.get(r)).filter(Boolean);
     if (pts.length) frontPts.push([pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length]);
@@ -640,15 +698,20 @@ async function main() {
 
   // 7. Dateien schreiben
   const poiById = new Map(pois.map((p) => [p.id, p]));
-  const index = {
-    generated: new Date().toISOString(),
-    attribution: [
-      '© OpenStreetMap-Mitwirkende (ODbL)',
-      'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen',
-      ...(mlyCount ? ['Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)'] : []),
-    ],
-    bezirke: [],
-  };
+  const index = acc.index;
+  index.attribution.push(
+    isWien
+      ? 'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen'
+      : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
+  );
+  if (mlyCount) acc.mapillary = true;
+  index.cities.push({
+    id: city.id,
+    name: city.name,
+    transit: isWien,
+    lamps: lampCount > 0,
+    bbox: bboxOf(bezirke.filter((b) => !b.transit).flatMap((b) => [[b.bbox[0], b.bbox[1]], [b.bbox[2], b.bbox[3]]])).map((v) => +v.toFixed(5)),
+  });
   for (const b of bezirke) {
     const file = files.get(b.nr);
     const poiList = [...file.pois].map((id) => {
@@ -671,12 +734,13 @@ async function main() {
       edges: file.edges,
       pois: poiList,
     };
-    const fname = `bezirk-${String(b.nr).padStart(2, '0')}.json`;
+    const fname = `${city.prefix}-${String(b.local).padStart(2, '0')}.json`;
     const json = JSON.stringify(out);
     fs.writeFileSync(path.join(OUT, fname), json);
     index.bezirke.push({
       nr: b.nr,
       name: b.name,
+      city: city.id,
       transit: b.transit,
       file: fname,
       bytes: json.length,
@@ -685,10 +749,25 @@ async function main() {
     });
     log(`  ${fname}: ${file.edges.length} Kanten, ${poiList.length} Orte, ${(json.length / 1024).toFixed(0)} KB`);
   }
-  fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(index));
-  fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(stops));
-  // Zusatzdaten (klein, für alle Bezirke gemeinsam)
-  const extras = { generated: index.generated, taxi, wc, works: worksRaw };
+  acc.stops.push(...stops);
+  if (isWien) acc.extras = { generated: index.generated, taxi, wc, works: worksRaw };
+}
+
+async function main() {
+  fs.mkdirSync(RAW, { recursive: true });
+  fs.mkdirSync(OUT, { recursive: true });
+  const acc = {
+    index: { generated: new Date().toISOString(), attribution: ['© OpenStreetMap-Mitwirkende (ODbL)'], cities: [], bezirke: [] },
+    stops: [],
+    extras: null,
+    mapillary: false,
+  };
+  for (const city of CITIES) await buildCity(city, acc);
+  if (acc.mapillary) acc.index.attribution.push('Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)');
+  fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(acc.index));
+  fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(acc.stops));
+  // Zusatzdaten der Stadt Wien (klein, für alle Bezirke gemeinsam)
+  const extras = acc.extras ?? { generated: acc.index.generated, taxi: [], wc: [], works: [] };
   fs.writeFileSync(path.join(OUT, 'extras.json'), JSON.stringify(extras));
   log(`  extras.json: ${(JSON.stringify(extras).length / 1024).toFixed(0)} KB`);
   log('fertig →', path.relative(ROOT, OUT));

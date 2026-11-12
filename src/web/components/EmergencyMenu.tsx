@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { buildMessage, smsLink, telLink, whatsappLink, type Contact, type MessageKind } from '../../core/contacts';
-import { EMERGENCY, HELPLINES, SILENT_CALL } from '../../core/helplines';
+import { EMERGENCY, helplinesFor, SILENT_CALL } from '../../core/helplines';
 import type { LngLat } from '../../core/types';
 import { ContactsEditor } from './ContactsEditor';
 import { Modal } from './Modal';
@@ -15,6 +15,8 @@ interface Props {
   onAlarm: () => void;
   /** Während einer Begleitung: zuletzt bekannte Position */
   lastPosition?: { coords: LngLat; time: number } | null;
+  /** gewählte Stadt ('wien', 'linz') für regionale Hilfsstellen */
+  city?: string;
 }
 
 /** Standort einmalig abfragen (nur auf Knopfdruck, wird nicht gespeichert) */
@@ -91,7 +93,7 @@ export function SilentCallHint() {
 }
 
 /** Notfall-Menü: Notrufe, eigene Kontakte, Hilfsstellen, stiller Notruf, Fake-Anruf */
-export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall, onAlarm, lastPosition }: Props) {
+export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall, onAlarm, lastPosition, city = 'wien' }: Props) {
   const [editContacts, setEditContacts] = useState(false);
   return (
     <Modal title="Hilfe & Notruf" onClose={onClose} variant="sos-modal">
@@ -105,7 +107,7 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
       <section className="sos-section" aria-labelledby="sos-reden">
         <h3 id="sos-reden">Hilfe und Reden</h3>
         <ul className="helplines">
-          {HELPLINES.map((h) => (
+          {helplinesFor(city).map((h) => (
             <li key={h.number}>
               <a className="helpline-call" href={`tel:${h.dial}`}>
                 <b>{h.name}</b>
@@ -120,7 +122,7 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
             </li>
           ))}
         </ul>
-        <p className="fineprint">Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.</p>
+        <p className="fineprint">{city === 'linz' ? 'Nummern für Oberösterreich geprüft im November 2026, die übrigen im Oktober 2026, jeweils auf offiziellen Seiten.' : 'Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.'}</p>
       </section>
 
       <section className="sos-section" aria-labelledby="sos-kontakte">
