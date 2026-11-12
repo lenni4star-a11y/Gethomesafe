@@ -1,0 +1,17 @@
+# Einmalig: prüft, welche Instagram-Namen vermutlich frei sind (wird danach gelöscht)
+name: Instagram-Namen prüfen
+on:
+  push:
+    branches: [pruefen-namen]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Namen prüfen
+        run: |
+          for n in goodway goodway.app goodway_app goodwayapp getgoodway goodway.berlin goodwayberlin goodway.heim goodwayhome goodway_home goodway.nachts goodway.night kommgutheim komm.gut.heim kommgutheim.app kommgutheim_app hellerweg hellerweg.app heimlicht heimlicht.app thegoodway.app goodway.city wayhome.app; do
+            code=$(curl -s -o /tmp/r.json -w "%{http_code}" -H "x-ig-app-id: 936619743392459" "https://www.instagram.com/api/v1/users/web_profile_info/?username=$n")
+            user=$(python3 -c 'import json;d=json.load(open("/tmp/r.json"));u=(d.get("data") or {}).get("user");print("vergeben:",u["username"],u["edge_followed_by"]["count"],"Follower") if u else print("kein Profil")' 2>/dev/null || echo "?")
+            echo "$n => HTTP $code $user"
+            sleep 3
+          done
