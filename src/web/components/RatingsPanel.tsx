@@ -1,4 +1,5 @@
 import { REASONS, SCORE_LABELS, WEEKDAY_SHORT, type Rating } from '../../core/ratings';
+import { Icon } from './Icon';
 import type { LngLat } from '../../core/types';
 import { Modal } from './Modal';
 
@@ -23,7 +24,7 @@ export function RatingsPanel({ ratings, view, onViewChange, timeLabel, visibleCo
   return (
     <Modal title="Bewertungen" onClose={onClose}>
       <button type="button" className="btn primary big" onClick={onStartRating}>
-        ⭐ Stelle auf der Karte bewerten
+        <Icon name="star" size={16} /> Stelle auf der Karte bewerten
       </button>
       <p className="fineprint">Danach auf einen Weg, einen Ort oder eine Haltestelle tippen.</p>
 

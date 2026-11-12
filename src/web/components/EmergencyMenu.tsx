@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { buildMessage, smsLink, telLink, whatsappLink, type Contact, type MessageKind } from '../../core/contacts';
 import { emergencyFor, helplinesFor, silentCallFor } from '../../core/helplines';
 import { currentCity } from '../region';
+import { SvgIcon } from './Icon';
 import type { LngLat } from '../../core/types';
 import { ContactsEditor } from './ContactsEditor';
 import { Modal } from './Modal';
@@ -169,7 +170,7 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
 
       <div className="sos-footer">
         <button type="button" className="alarm-btn" onClick={onAlarm}>
-          🚨 ALARM
+          <SvgIcon name="alarm" size={22} /> ALARM
           <small>sehr laute Sirene + blinkender Bildschirm</small>
         </button>
       </div>

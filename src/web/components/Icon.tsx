@@ -3,6 +3,7 @@
 // Den Namen liefert immer der Knopf selbst (aria-label oder sichtbarer Text).
 
 import type { ReactNode } from 'react';
+import { svgIcon } from '../placeIcons';
 
 type Name = 'settings' | 'star' | 'home' | 'search' | 'camera' | 'company';
 
@@ -59,6 +60,11 @@ export function Icon({ name, size = 20 }: { name: Name; size?: number }) {
       {paths[name]}
     </svg>
   );
+}
+
+/** Symbol aus placeIcons (für Orte, Haltestellen, Alarm) als React-Element */
+export function SvgIcon({ name, size = 16 }: { name: string; size?: number }) {
+  return <span className="svg-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: svgIcon(name, size) }} />;
 }
 
 /** Wortmarke: „goodway“ mit dem Punkt als Licht der Straßenlaterne */

@@ -1,17 +1,17 @@
 import type { Poi, PoiCategory } from '../core/types';
 
-/** Symbol und Bezeichnung je Ortsart (für Liste und Karte) */
+/** Bezeichnung je Ortsart (Symbole: siehe placeIcons.ts; das Feld icon bleibt leer, keine Emojis) */
 export const PLACE_META: Record<PoiCategory, { icon: string; label: string }> = {
-  police: { icon: '👮', label: 'Polizei' },
-  hospital: { icon: '🏥', label: 'Spital mit Notaufnahme' },
-  fuel: { icon: '⛽', label: 'Tankstelle' },
-  shop: { icon: '🛒', label: 'Geschäft' },
-  bar: { icon: '🍸', label: 'Bar / Lokal' },
-  food: { icon: '🍴', label: 'Lokal' },
-  culture: { icon: '🎭', label: 'Kino / Theater' },
-  pharmacy: { icon: '💊', label: 'Apotheke' },
-  hotel: { icon: '🏨', label: 'Hotel' },
-  transit: { icon: '🚇', label: 'Öffi-Station' },
+  police: { icon: '', label: 'Polizei' },
+  hospital: { icon: '', label: 'Spital mit Notaufnahme' },
+  fuel: { icon: '', label: 'Tankstelle' },
+  shop: { icon: '', label: 'Geschäft' },
+  bar: { icon: '', label: 'Bar / Lokal' },
+  food: { icon: '', label: 'Lokal' },
+  culture: { icon: '', label: 'Kino / Theater' },
+  pharmacy: { icon: '', label: 'Apotheke' },
+  hotel: { icon: '', label: 'Hotel' },
+  transit: { icon: '', label: 'Öffi-Station' },
 };
 
 const KIND_LABEL: Record<string, string> = {
