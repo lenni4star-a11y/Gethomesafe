@@ -61,8 +61,9 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
               window.location.reload(); // Karte mit neuem Stil laden
             }}
           >
-            <option value="hell">Hell, bunt (wie Google Maps)</option>
-            <option value="dunkel">Dunkel (blendet nachts weniger)</option>
+            <option value="auto">Automatisch: tagsüber hell, nachts dunkel</option>
+            <option value="hell">Immer hell, bunt (wie Google Maps)</option>
+            <option value="dunkel">Immer dunkel (blendet nachts weniger)</option>
           </select>
         </label>
         <p className="fineprint">Beim Wechseln lädt die App kurz neu. Während einer Begleitung lieber nicht wechseln.</p>

@@ -74,14 +74,10 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
     });
     mapRef.current = map;
     if (import.meta.env.DEV) (window as unknown as { __map: MLMap }).__map = map;
-    map.addControl(
-      new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution: 'Daten: © OpenStreetMap-Mitwirkende, Stadt Wien – data.wien.gv.at, Stadt Linz – data.linz.gv.at, Geoportal Berlin, VBB',
-      }),
-      'bottom-right',
-    );
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    // Quellenangabe als kleiner Text statt Info-Knopf (OpenStreetMap und OpenFreeMap verlangen eine sichtbare Nennung);
+    // die Datenquellen der Städte stehen auf der Datenschutz-Seite
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), 'top-right');
     // Bei weitem Zoom Orts-Symbole als kleine Punkte zeigen
     const updateFar = () => container.current?.classList.toggle('far', map.getZoom() < 16);
     map.on('zoomend', updateFar);
