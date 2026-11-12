@@ -33,7 +33,7 @@ await page.getByLabel('Nach auf der Karte wählen').click().catch((e) => console
 await page.waitForTimeout(1500);
 await page.mouse.click(150, 190);
 await page.waitForTimeout(20000);
-console.log('inputs', await inputs.nth(0).inputValue(), '|', await inputs.nth(1).inputValue());
+
 await page.screenshot({ path: `${out}/3-route.png` });
 console.log('tabs', await page.locator('.mode-tab').count(), 'message', await page.locator('.message').allTextContents());
 await page.getByText('Weg ansehen').count();
