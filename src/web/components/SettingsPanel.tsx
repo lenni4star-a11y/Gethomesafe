@@ -58,6 +58,10 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
           </select>
         </label>
         <p className="fineprint">Lädt die App kurz neu.</p>
+        <label className="check-row">
+          <input type="checkbox" checked={settings.nightLights !== false} onChange={(e) => onChange({ ...settings, nightLights: e.target.checked })} />
+          <span>Nachts beleuchtete Straßen zeigen</span>
+        </label>
       </section>
 
       {children}

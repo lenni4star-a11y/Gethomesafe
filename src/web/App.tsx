@@ -132,6 +132,25 @@ export function App() {
   // hell/dunkel für die Mitte der gewählten Stadt (Berlin und Wien unterscheiden sich um bis zu eine halbe Stunde)
   const dark = isDark(time, (cityInfo.bbox[1] + cityInfo.bbox[3]) / 2, (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2);
 
+  // Licht-Ansicht: nachts zeigt die Karte, welche Wege laut Daten beleuchtet sind
+  const showLights = dark && settings.nightLights !== false && !!planner;
+  const lightSource = useMemo(
+    () =>
+      showLights && planner
+        ? async (box: [number, number, number, number]) => {
+            await planner.ensureDistricts(
+              [
+                [box[0], box[1]],
+                [box[2], box[3]],
+              ],
+              0,
+            );
+            return planner.graph.litLines(box);
+          }
+        : null,
+    [showLights, planner],
+  );
+
   useEffect(() => {
     map.current?.setPoints(start?.coords ?? null, end?.coords ?? null);
   }, [start, end]);
@@ -354,7 +373,7 @@ export function App() {
 
   return (
     <div className="app">
-      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} />
+      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} lightSource={lightSource} />
 
       <header className="topbar">
         <Wordmark />
@@ -730,7 +749,7 @@ export function App() {
           </section>
           <h2 className="settings-group">Hilfe und Datenschutz</h2>
           <section className="settings-section">
-                        <div className="tp-row">
+            <div className="tp-row">
               <button type="button" className="chip" onClick={() => (setShowSettings(false), setShowOnboarding(true))}>
                 Einführung ansehen
               </button>

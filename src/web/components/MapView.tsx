@@ -46,11 +46,13 @@ interface Props {
   /** gewählte Stadt: Karte zeigt deren Pilotgebiet */
   city?: string;
   onMapClick: (p: LngLat) => void;
+  /** Licht-Ansicht nachts: liefert beleuchtete Wege im Ausschnitt; fehlt sie, ist die Ansicht aus */
+  lightSource?: ((box: [number, number, number, number]) => Promise<{ coords: LngLat[]; strength: number }[]>) | null;
 }
 
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, city = 'wien', onMapClick }, ref) {
+export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, city = 'wien', onMapClick, lightSource = null }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const ready = useRef<Promise<void>>();
@@ -62,6 +64,14 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
   const lineBadges = useRef<maplibregl.Marker[]>([]);
   const clickRef = useRef(onMapClick);
   clickRef.current = onMapClick;
+  const lightRef = useRef(lightSource);
+  lightRef.current = lightSource;
+  const updateLights = useRef<() => void>(() => {});
+
+  // Licht-Ansicht an- oder ausschalten, wenn sich Tag/Nacht oder die Stadt ändert
+  useEffect(() => {
+    void ready.current?.then(() => updateLights.current());
+  }, [lightSource]);
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -95,6 +105,48 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
 
         map.addSource('area', { type: 'geojson', data: empty });
         map.addLayer({ id: 'area-line', type: 'line', source: 'area', paint: { 'line-color': '#c7b8ff', 'line-width': 1.5, 'line-opacity': 0.5, 'line-dasharray': [3, 2] } });
+
+        // Licht-Ansicht: beleuchtete Wege als warmer Schein (nur nachts, ab Zoom 14), unter den Routen
+        map.addSource('lights', { type: 'geojson', data: empty });
+        map.addLayer({
+          id: 'lights-glow',
+          type: 'line',
+          source: 'lights',
+          minzoom: 14,
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#ffc764',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 14, 6, 17, 22],
+            'line-blur': ['interpolate', ['linear'], ['zoom'], 14, 4, 17, 14],
+            'line-opacity': ['*', 0.4, ['get', 's']],
+          },
+        });
+        map.addLayer({
+          id: 'lights-core',
+          type: 'line',
+          source: 'lights',
+          minzoom: 14,
+          layout: { 'line-cap': 'round' },
+          paint: { 'line-color': '#ffe2a8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2], 'line-opacity': ['*', 0.75, ['get', 's']] },
+        });
+        let lightJob = 0;
+        updateLights.current = () => {
+          const src = map.getSource('lights') as GeoJSONSource | undefined;
+          const fn = lightRef.current;
+          if (!src) return;
+          if (!fn || map.getZoom() < 14) return src.setData(empty);
+          const b = map.getBounds();
+          const job = ++lightJob;
+          void fn([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).then((lines) => {
+            if (job !== lightJob) return;
+            src.setData({
+              type: 'FeatureCollection',
+              features: lines.map((l) => ({ type: 'Feature' as const, properties: { s: Math.round(l.strength * 100) / 100 }, geometry: { type: 'LineString' as const, coordinates: l.coords } })),
+            });
+          });
+        };
+        map.on('moveend', () => updateLights.current());
+        updateLights.current();
 
         for (const id of ['other', 'chosen'] as const) map.addSource(`route-${id}`, { type: 'geojson', data: empty });
         map.addLayer({
