@@ -2912,3 +2912,15 @@ a.btn {
     font-size: 0.92rem;
   }
 }
+
+/* Stadtwahl in der eingeklappten Leiste (immer sichtbar, auch am Handy) */
+.city-select.chip {
+  flex: none;
+  min-height: 44px;
+  max-width: 40%;
+  padding: 0 28px 0 12px;
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  color: inherit;
+  font-weight: 600;
+}
