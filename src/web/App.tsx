@@ -376,23 +376,6 @@ export function App() {
 
       {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
 
-      <div className="view-toggle" role="radiogroup" aria-label="Ansicht">
-        <button type="button" role="radio" aria-checked={!streetMode} className={!streetMode ? 'active' : ''} onClick={() => setStreetMode(false)}>
-          Karte
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={streetMode}
-          className={streetMode ? 'active' : ''}
-          onClick={() => {
-            setStreetMode(true);
-            setSheet('collapsed');
-          }}
-        >
-          <Icon name="camera" size={18} /> Straße
-        </button>
-      </div>
       {streetMode && !streetAt && (
         <div className="pick-banner" role="status">
           {mlyToken ? 'Straßenansicht: Tippe auf eine Stelle der Karte (grüne Linien = Fotos vorhanden).' : 'Die Straßenfotos sind in dieser Version noch nicht eingerichtet.'}
