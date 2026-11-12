@@ -104,7 +104,8 @@ async function zuerichCrime() {
     const split = (l) => l.split(sep).map((x) => x.replace(/^"|"$/g, '').trim());
     const head = split(lines[0]);
     const col = (re) => head.findIndex((h) => re.test(h));
-    const cArea = col(/gebiet|gemeinde|kreis/i), cYear = col(/jahr/i), cTitle = col(/^haupttitel$/i), cVal = col(/anzahl|straftaten|wert/i);
+    const pick = (...res) => res.map(col).find((i) => i >= 0) ?? -1;
+    const cArea = pick(/^stadtkreis_name$/i, /kreis/i, /gebiet/i), cYear = pick(/jahr/i), cTitle = pick(/^haupttitel$/i), cVal = pick(/^straftaten_total$/i, /anzahl|straftaten|wert/i);
     log('  PKS Zürich Spalten:', head.join(' | '));
     const rows = lines.slice(1).map(split).filter((r) => /kreis/i.test(r[cArea] ?? ''));
     const year = Math.max(...rows.map((r) => Number(r[cYear]) || 0));
@@ -114,6 +115,7 @@ async function zuerichCrime() {
       const k = Number((r[cArea].match(/kreis\s*(\d+)/i) ?? [])[1]);
       if (k) counts.set(k, (counts.get(k) ?? 0) + (Number(r[cVal]) || 0));
     }
+    if (!counts.size) log('  PKS Zürich: keine passenden Zeilen, Beispiel:', lines[1]);
     const kreise = await wfsGeoJson(ZH_WFS('Stadtkreise', 'adm_stadtkreise_a'), 'zuerich-kreise.json');
     const regions = [];
     for (const f of kreise.features) {

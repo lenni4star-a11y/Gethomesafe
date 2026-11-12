@@ -104,7 +104,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
         container.current?.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 
         map.addSource('area', { type: 'geojson', data: empty });
-        map.addLayer({ id: 'area-line', type: 'line', source: 'area', paint: { 'line-color': '#c7b8ff', 'line-width': 1.5, 'line-opacity': 0.5, 'line-dasharray': [3, 2] } });
+        // Bezirksgrenzen werden bewusst nicht gezeichnet (schlichte Karte)
 
         // Licht-Ansicht: beleuchtete Wege als warmer Schein (nur nachts, ab Zoom 14), unter den Routen
         map.addSource('lights', { type: 'geojson', data: empty });

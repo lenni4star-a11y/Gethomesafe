@@ -528,7 +528,7 @@ export function App() {
           </div>
           {!home && !homePromptDone && onboardingDone && (
             <div className="notice home-prompt">
-              <b>Zuhause festlegen?</b> Dann planst du mit einem Tipp den sichersten Heimweg. Bleibt nur auf deinem Gerät.
+              <b>Zuhause festlegen?</b> Dann geht der Heimweg mit einem Tipp.
               <div className="tp-row">
                 <button type="button" className="chip active" onClick={() => (setHomePromptDone(true), setShowSettings(true))}>
                   Festlegen
@@ -541,7 +541,6 @@ export function App() {
           )}
 
           <div className="time-row">
-            <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? 'dunkel' : 'hell'}</span>
             <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
               {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾
             </button>
@@ -683,18 +682,12 @@ export function App() {
             </>
           )}
 
-          {!plan && !message && !busy && (
-            <p className="intro">
-              Wohin willst du? Danach vergleichst du Öffis, zu Fuß, Taxi und Roller, mit einer Einschätzung, wie angenehm sich der Weg anfühlt.
-            </p>
-          )}
-
           <button type="button" className="btn escort-start" onClick={() => setShowEscortSetup(true)}>
             <Icon name="company" size={20} /> Begleitung starten
           </button>
 
 
-              <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: {emergencyText(cityInfo.id)}.</p>
+              <p className="disclaimer">Prototyp · Notfall: {emergencyText(cityInfo.id)}</p>
             </>
           )}
         </section>

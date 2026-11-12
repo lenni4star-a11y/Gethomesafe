@@ -71,10 +71,12 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
         <span>
           <b>Rückfrage bei Abweichung oder langem Stehenbleiben</b>
           <br />
-          <span className="muted">Nur wenn eine Route geplant ist bzw. der Standort verfügbar ist. An Haltestellen wird Warten nicht gezählt.</span>
+          <span className="muted">Warten an Haltestellen zählt nicht.</span>
         </span>
       </label>
       {(settings.watchRoute ?? true) && (
+        <details className="more">
+          <summary>Feineinstellungen</summary>
         <div className="watch-grid">
           <label className="field">
             <span>Abweichung ab</span>
@@ -117,6 +119,7 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
             </select>
           </label>
         </div>
+        </details>
       )}
       <label className="field">
         <span>Anrufversuche, bevor Kontakte benachrichtigt werden</span>
