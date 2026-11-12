@@ -1,4 +1,4 @@
-# Einmalig: prüft, welche Instagram-Namen vermutlich frei sind (wird danach gelöscht)
+# Einmalig: Datensatz „Zürich schaut hin“ ansehen (wird danach gelöscht)
 name: Instagram-Namen prüfen
 on:
   push:
@@ -7,18 +7,15 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Namen prüfen
+      - name: Zürich schaut hin
         run: |
-          for n in goodway goodway.app goodway_app goodwayapp getgoodway goodway.berlin goodwayberlin goodway.heim goodwayhome goodway_home goodway.nachts goodway.night kommgutheim komm.gut.heim kommgutheim.app kommgutheim_app hellerweg hellerweg.app heimlicht heimlicht.app thegoodway.app goodway.city wayhome.app; do
-            code=$(curl -s -o /tmp/r.json -w "%{http_code}" -H "x-ig-app-id: 936619743392459" "https://www.instagram.com/api/v1/users/web_profile_info/?username=$n")
-            user=$(python3 -c 'import json;d=json.load(open("/tmp/r.json"));u=(d.get("data") or {}).get("user");print("vergeben:",u["username"],u["edge_followed_by"]["count"],"Follower") if u else print("kein Profil")' 2>/dev/null || echo "?")
-            echo "$n => HTTP $code $user"
-            sleep 3
-          done
-      - name: Kontakte und Datensatz Zürich schaut hin
-        run: |
-          for u in https://www.clubcommission.de/impressum/ https://www.clubcommission.de/kontakt/ https://prototypefund.opendata.ch/kontakt/ https://prototypefund.opendata.ch/ https://www.stadt-zuerich.ch/de/lebenslagen/unterstuetzung-und-beratung/diversitaet-und-inklusion/gleichstellung.html; do
-            echo "== $u"; curl -sL "$u" | grep -oiE 'mailto:[^"?]+|[a-z0-9._-]+@[a-z0-9.-]+\.(de|ch|org|berlin)' | sort -u | head -8
-          done
-          echo "== Zürich schaut hin"
-          curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=sid_zuerich_schaut_hin_od6001" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; print(d.get("notes","")[:1500]); [print(r.get("format"), r.get("url")) for r in d["resources"]]'
+          curl -sL https://data.stadt-zuerich.ch/dataset/sid_zuerich_schaut_hin_od6001/download/BEV600OD6001.csv -o z.csv
+          wc -l z.csv; head -5 z.csv
+          python3 - <<'PY'
+          import csv, collections
+          rows = list(csv.DictReader(open('z.csv', encoding='utf-8-sig')))
+          print(len(rows), 'Zeilen; Spalten:', list(rows[0].keys()))
+          for k in rows[0].keys():
+              c = collections.Counter(r[k] for r in rows)
+              print(k, len(c), 'Werte, z. B.:', c.most_common(6))
+          PY
