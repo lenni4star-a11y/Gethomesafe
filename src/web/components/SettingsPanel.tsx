@@ -1,8 +1,6 @@
 import type { Settings } from '../../core/settings';
 import type { ParkAvoidance } from '../../core/safety';
 import { Modal } from './Modal';
-import { SoundCheck } from './SoundCheck';
-import { BUILT_IN_TOKEN } from '../mapillary';
 import { getMapStyle, setMapStyle, type MapStyleChoice } from '../mapStyle';
 
 interface Props {
@@ -23,8 +21,9 @@ const PARK_LABELS: Record<ParkAvoidance, string> = {
 export function SettingsPanel({ settings, onChange, onClose, children }: Props) {
   return (
     <Modal title="Einstellungen" onClose={onClose}>
+      <h2 className="settings-group">Weg und Karte</h2>
       <section className="settings-section">
-        <h3>Route</h3>
+        <h3>Parks</h3>
         <label className="field">
           <span>
             Parks nachts: <b>{PARK_LABELS[settings.parkAvoidance]}</b>
@@ -39,14 +38,14 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
             aria-valuetext={PARK_LABELS[settings.parkAvoidance]}
           />
         </label>
-        <p className="fineprint">Wege durch oder direkt neben Parks werden nachts abgewertet, aber nie ganz ausgeschlossen. Nachts zugesperrte Parks werden umgangen.</p>
+        <p className="fineprint">Nachts zugesperrte Parks werden immer umgangen.</p>
       </section>
 
       <section className="settings-section">
         <h3>Karte</h3>
         <label className="field">
-          <span>Aussehen der Karte</span>
           <select
+            aria-label="Aussehen der Karte"
             value={getMapStyle()}
             onChange={(e) => {
               setMapStyle(e.target.value as MapStyleChoice);
@@ -54,46 +53,11 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
             }}
           >
             <option value="auto">Automatisch: tagsüber hell, nachts dunkel</option>
-            <option value="hell">Immer hell, bunt (wie Google Maps)</option>
-            <option value="dunkel">Immer dunkel (blendet nachts weniger)</option>
+            <option value="hell">Immer hell</option>
+            <option value="dunkel">Immer dunkel</option>
           </select>
         </label>
-        <p className="fineprint">Beim Wechseln lädt die App kurz neu. Während einer Begleitung lieber nicht wechseln.</p>
-      </section>
-
-      <section className="settings-section">
-        <h3>Ton, Stimme und Vibration</h3>
-        <SoundCheck voiceMode={settings.voice} />
-        <label className="field">
-          <span>Stimme im Anruf</span>
-          <select value={settings.voice} onChange={(e) => onChange({ ...settings, voice: e.target.value as Settings['voice'] })}>
-            <option value="auto">Automatisch (Gerätestimme, sonst Aufnahme)</option>
-            <option value="device">Nur Gerätestimme</option>
-            <option value="recording">Nur aufgenommene Stimme</option>
-          </select>
-        </label>
-      </section>
-
-      <section className="settings-section">
-        <h3>Straßenfotos (Mapillary)</h3>
-        <label className="field">
-          <span>Zugangsschlüssel (optional)</span>
-          <input
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="MLY|…"
-            value={settings.mapillaryToken}
-            onChange={(e) => onChange({ ...settings, mapillaryToken: e.target.value.trim() })}
-          />
-        </label>
-        <p className="fineprint">
-          {BUILT_IN_TOKEN
-            ? 'Die Straßenfotos sind für alle eingerichtet. Hier nur einen eigenen Schlüssel eintragen, wenn du einen anderen verwenden möchtest.'
-            : 'In dieser Version ist noch kein Schlüssel eingebaut. Mit einem eigenen kostenlosen Mapillary-Schlüssel siehst du trotzdem Straßenfotos.'}{' '}
-          Ein hier eingetragener Schlüssel bleibt nur auf diesem Gerät.
-        </p>
+        <p className="fineprint">Lädt die App kurz neu.</p>
       </section>
 
       {children}

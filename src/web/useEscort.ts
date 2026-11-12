@@ -157,8 +157,8 @@ export function useEscort() {
   }, [active]);
 
   const start = useCallback(
-    async (settings: EscortSettings, pin: string, destination: string, contactIds: string[], route?: LngLat[], destCoords?: LngLat, decoyHash?: string | null) => {
-    const s: EscortSession = { state: startEscort(settings, Date.now()), pinHash: await hashPin(pin), destination, contactIds, route, destCoords, decoyHash };
+    async (settings: EscortSettings, pinHash: string, destination: string, contactIds: string[], route?: LngLat[], destCoords?: LngLat, decoyHash?: string | null) => {
+    const s: EscortSession = { state: startEscort(settings, Date.now()), pinHash, destination, contactIds, route, destCoords, decoyHash };
     sessionRef.current = s;
     setSession(s);
     save(SESSION_KEY, s);

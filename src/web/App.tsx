@@ -19,7 +19,9 @@ import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
 import { EscortView } from './components/EscortView';
 import { HomeSettings } from './components/HomeSettings';
-import { DecoyPinSettings } from './components/DecoyPinSettings';
+import { PinSettings } from './components/PinSettings';
+import { ContactsEditor } from './components/ContactsEditor';
+import { SoundCheck } from './components/SoundCheck';
 import { triggerSilentAlarm } from './silentAlarm';
 import { Onboarding } from './components/Onboarding';
 import { PrivacyPage } from './components/PrivacyPage';
@@ -694,6 +696,7 @@ export function App() {
 
       {showSettings && (
         <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)}>
+          <h2 className="settings-group">Meine Orte</h2>
           <HomeSettings
             home={home}
             onHomeChange={setHome}
@@ -705,9 +708,29 @@ export function App() {
             onPickOnMap={() => (setShowSettings(false), setPick('home'))}
             onLocate={() => locate((p) => setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }))}
           />
+          <h2 className="settings-group">Notfallkontakte</h2>
           <section className="settings-section">
-            <h3>Hilfe und Datenschutz</h3>
-            <div className="tp-row">
+            <ContactsEditor contacts={contacts} onChange={setContacts} />
+          </section>
+          <h2 className="settings-group">Begleitung</h2>
+          <section className="settings-section">
+            <h3>Nachfragen</h3>
+            <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
+          </section>
+          <PinSettings
+            appPinHash={settings.appPinHash ?? null}
+            decoyPinHash={settings.decoyPinHash}
+            locked={escort.session !== null}
+            onAppPin={(h) => setSettings({ ...settings, appPinHash: h })}
+            onDecoyPin={(h) => setSettings({ ...settings, decoyPinHash: h })}
+          />
+          <section className="settings-section">
+            <h3>Ton testen</h3>
+            <SoundCheck voiceMode={settings.voice} />
+          </section>
+          <h2 className="settings-group">Hilfe und Datenschutz</h2>
+          <section className="settings-section">
+                        <div className="tp-row">
               <button type="button" className="chip" onClick={() => (setShowSettings(false), setShowOnboarding(true))}>
                 Einführung ansehen
               </button>
@@ -720,11 +743,6 @@ export function App() {
             </button>
             <p className="fineprint">Löscht Zuhause, Lieblingsorte, Kontakte, Bewertungen und Einstellungen auf diesem Gerät. Das kann nicht rückgängig gemacht werden.</p>
           </section>
-          <section className="settings-section">
-            <h3>Begleitmodus</h3>
-            <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
-          </section>
-          <DecoyPinSettings decoyPinHash={settings.decoyPinHash} onChange={(h) => setSettings({ ...settings, decoyPinHash: h })} />
         </SettingsPanel>
       )}
 
@@ -765,11 +783,13 @@ export function App() {
           settings={settings.escort}
           onSettingsChange={(e) => setSettings({ ...settings, escort: e })}
           onClose={() => setShowEscortSetup(false)}
+          appPinHash={settings.appPinHash ?? null}
+          onAppPin={(h) => setSettings({ ...settings, appPinHash: h })}
           decoyPinHash={settings.decoyPinHash}
-          onStart={(pin, dest, ids) => {
+          onStart={(pinHash, dest, ids) => {
             setShowEscortSetup(false);
             const destCoords = end?.coords ?? (dest === 'Zuhause' ? home?.coords : undefined);
-            escort.start(settings.escort, pin, dest, ids, chosen?.coords, destCoords, settings.decoyPinHash);
+            escort.start(settings.escort, pinHash, dest, ids, chosen?.coords, destCoords, settings.decoyPinHash);
             setEscortCompact(true);
           }}
         />
