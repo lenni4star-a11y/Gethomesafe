@@ -76,6 +76,8 @@ export interface DistrictFile {
 export interface DistrictInfo {
   nr: number;
   name: string;
+  /** Stadt ('wien', 'linz'); ältere Daten ohne Feld = Wien */
+  city?: string;
   /** Durchgangs-Bezirk: Routen dürfen durchführen, Start/Ziel nicht */
   transit?: boolean;
   file: string;
@@ -84,11 +86,27 @@ export interface DistrictInfo {
   outline: LngLat[];
 }
 
+/** Eine Stadt im Datenbestand */
+export interface CityInfo {
+  id: string;
+  name: string;
+  /** Öffi-Fahrplan vorhanden? */
+  transit: boolean;
+  /** Leuchtenstandorte der Stadt vorhanden? */
+  lamps: boolean;
+  bbox: [number, number, number, number];
+}
+
 export interface DataIndex {
   generated: string;
   attribution: string[];
+  /** ab Datenstand Nov. 2026; fehlt bei älteren Daten (dann nur Wien) */
+  cities?: CityInfo[];
   bezirke: DistrictInfo[];
 }
+
+/** Stadt eines Bezirks (ältere Daten ohne Feld = Wien) */
+export const cityOf = (b: { city?: string }) => b.city ?? 'wien';
 
 export interface Stop {
   id: string;
@@ -97,6 +115,7 @@ export interface Stop {
   lines: string[];
   night: boolean;
   bezirk: number;
+  city?: string;
   lon: number;
   lat: number;
 }

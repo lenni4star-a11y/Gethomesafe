@@ -38,7 +38,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
       abort.current = new AbortController();
       setBusy(true);
       try {
-        const [stops, addresses] = await Promise.all([searchStops(q), searchAddress(q, bbox, abort.current.signal).catch(() => [])]);
+        const [stops, addresses] = await Promise.all([searchStops(q, bbox), searchAddress(q, bbox, abort.current.signal).catch(() => [])]);
         setResults([...stops, ...addresses]);
       } finally {
         setBusy(false);

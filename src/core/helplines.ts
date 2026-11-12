@@ -1,4 +1,4 @@
-// Notrufnummern und Hilfsstellen in Wien – zentral gepflegt.
+// Notrufnummern und Hilfsstellen in Österreich, dazu regionale Stellen für Wien und Linz/Oberösterreich – zentral gepflegt.
 // Nur Nummern, die auf offiziellen Seiten geprüft wurden (Stand: Oktober 2026). Bitte regelmäßig prüfen.
 
 export interface Helpline {
@@ -12,6 +12,8 @@ export interface Helpline {
   /** ein Satz: wofür die Stelle da ist */
   description: string;
   source: string;
+  /** nur in dieser Stadt anzeigen ('wien', 'linz'); ohne Angabe österreichweit */
+  region?: string;
 }
 
 export const EMERGENCY = [
@@ -29,6 +31,7 @@ export const HELPLINES: Helpline[] = [
     hours: 'rund um die Uhr, auch an Sonn- und Feiertagen',
     description: 'Für Frauen und Mädchen ab 14, die Gewalt erlebt haben. Kostenlos, vertraulich, auf Wunsch anonym.',
     source: 'https://www.wien.gv.at/menschen/frauen/beratung/frauennotruf/',
+    region: 'wien',
   },
   {
     name: 'Frauenhelpline gegen Gewalt',
@@ -74,6 +77,37 @@ export const HELPLINES: Helpline[] = [
     hours: 'rund um die Uhr',
     description: 'Bei akuten psychischen Krisen.',
     source: 'https://psd-wien.at',
+    region: 'wien',
+  },
+  {
+    name: 'Krisenhilfe OÖ',
+    number: '0732 2177',
+    dial: '+437322177',
+    allDay: true,
+    hours: 'rund um die Uhr, kostenlos',
+    description: 'Bei akuten psychischen Krisen in Oberösterreich, auch nach belastenden Erlebnissen.',
+    source: 'https://www.land-oberoesterreich.gv.at/39189.htm',
+    region: 'linz',
+  },
+  {
+    name: 'Gewaltschutzzentrum Oberösterreich',
+    number: '0732 60 77 60',
+    dial: '+43732607760',
+    allDay: false,
+    hours: 'nicht rund um die Uhr',
+    description: 'Beratung und Unterstützung nach Gewalt, kostenlos und vertraulich.',
+    source: 'https://www.land-oberoesterreich.gv.at/25855.htm',
+    region: 'linz',
+  },
+  {
+    name: 'Autonomes Frauenzentrum Linz',
+    number: '0732 60 22 00',
+    dial: '+43732602200',
+    allDay: false,
+    hours: 'nicht rund um die Uhr',
+    description: 'Beratung für Frauen und Mädchen, die Gewalt erlebt haben.',
+    source: 'https://www.land-oberoesterreich.gv.at/25855.htm',
+    region: 'linz',
   },
   {
     name: 'Rat auf Draht',
@@ -94,6 +128,10 @@ export const HELPLINES: Helpline[] = [
     source: 'https://www.oesterreich.gv.at/de/themen/notfaelle_unfaelle_und_kriminalitaet/notrufnummern',
   },
 ];
+
+/** Hilfsstellen für eine Stadt: österreichweite plus regionale */
+export const helplinesFor = (city: string) =>
+  HELPLINES.filter((h) => !h.region || h.region === city).sort((a, b) => Number(!a.region) - Number(!b.region));
 
 export const SILENT_CALL = {
   app: 'DEC112',
