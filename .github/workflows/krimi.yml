@@ -1,0 +1,31 @@
+# Nur zum Nachschauen: Kriminalitätsatlas Berlin und LOR-Grenzen (wird danach wieder gelöscht)
+name: Daten erkunden Kriminalitätsatlas
+on:
+  push:
+    branches: [erkunden-linz]
+    paths: ['.github/workflows/krimi.yml']
+jobs:
+  look:
+    runs-on: ubuntu-latest
+    steps:
+      - name: LOR WFS
+        run: |
+          for s in lor_2021 lor_bezirksregionen lor_2021_bezirksregionen; do echo "== $s"; curl -sL "https://gdi.berlin.de/services/wfs/$s?request=GetCapabilities&service=WFS" | grep -oE "<Name>[^<]+" | head -8; done
+          T=$(curl -sL "https://gdi.berlin.de/services/wfs/lor_2021?request=GetCapabilities&service=WFS" | grep -oE "<Name>[^<]*bzr[^<]*|<Name>[^<]*bezirksreg[^<]*" | head -1 | sed 's/<Name>//')
+          echo "T=$T"
+          curl -sL "https://gdi.berlin.de/services/wfs/lor_2021?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&count=1&outputFormat=application/json&srsName=EPSG:4326" | head -c 500; echo
+      - name: Kriminalitätsatlas
+        run: |
+          pip install openpyxl -q
+          curl -sL https://www.berlin.de/polizei/_assets/dienststellen/lka/fallzahlen_hz-2016-2025.xlsx -o k.xlsx; ls -la k.xlsx
+          python3 - <<'PY'
+          import openpyxl
+          wb = openpyxl.load_workbook('k.xlsx', read_only=True)
+          print(wb.sheetnames)
+          for name in wb.sheetnames[:2] + [n for n in wb.sheetnames if '2025' in n][:2]:
+              ws = wb[name]
+              print('==', name)
+              for i, row in enumerate(ws.iter_rows(values_only=True)):
+                  print(row[:20])
+                  if i > 8: break
+          PY
