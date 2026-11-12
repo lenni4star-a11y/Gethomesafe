@@ -113,7 +113,7 @@ export function RouteDetails({ route, date, onFocus }: Props) {
           {route.dark && (
             <li>
               Beleuchtung: {Math.round(route.litSources.osm * 100)} % laut OpenStreetMap,{' '}
-              {route.litSources.stadt > 0 ? `${Math.round(route.litSources.stadt * 100)} % laut Leuchtenstandorten der Stadt Wien, ` : ''}
+              {route.litSources.stadt > 0 ? `${Math.round(route.litSources.stadt * 100)} % laut Leuchtenstandorten der Stadt, ` : ''}
               {Math.round(route.litSources.mapillary * 100)} % Laternen auf Mapillary-Fotos erkannt (schwächer gewichtet).
             </li>
           )}

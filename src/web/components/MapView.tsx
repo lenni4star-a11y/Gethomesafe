@@ -76,7 +76,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
     map.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: 'Daten: © OpenStreetMap-Mitwirkende, Stadt Wien – data.wien.gv.at, Stadt Linz – data.linz.gv.at',
+        customAttribution: 'Daten: © OpenStreetMap-Mitwirkende, Stadt Wien – data.wien.gv.at, Stadt Linz – data.linz.gv.at, Geoportal Berlin, VBB',
       }),
       'bottom-right',
     );
