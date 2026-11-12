@@ -89,7 +89,8 @@ export function App() {
   const [home, setHome] = useStored<Place | null>('home', null);
   const [favorites, setFavorites] = useStored<Place[]>('favorites', []);
   /** gewählte Stadt (Wien, Linz …): bestimmt Kartenausschnitt, Suche und regionale Hilfsstellen */
-  const [city, setCity] = useStored<string>('city', 'wien');
+  // neuer Speicherschlüssel: alle starten einmal in Berlin (Schwerpunkt), danach gilt die eigene Wahl
+  const [city, setCity] = useStored<string>('stadt', 'berlin');
   const [homePromptDone, setHomePromptDone] = useStored<boolean>('homePromptDone', false);
   const [onboardingDone, setOnboardingDone, onboardingLoaded] = useStored<boolean>('onboardingDone', false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -102,12 +103,12 @@ export function App() {
       .catch(() => setMessage('Die Kartendaten konnten nicht geladen werden. Bitte Seite neu laden.'));
   }, []);
 
-  const cities = useMemo(() => planner?.index.cities ?? [{ id: 'wien', name: 'Wien', transit: true, lamps: true, bbox: [16.28, 48.17, 16.43, 48.24] as [number, number, number, number] }], [planner]);
+  const cities = useMemo(() => planner?.index.cities ?? [{ id: 'berlin', name: 'Berlin', transit: true, lamps: true, bbox: [13.09, 52.34, 13.76, 52.68] as [number, number, number, number] }], [planner]);
   const cityInfo = cities.find((c) => c.id === city) ?? cities[0];
   setCurrentCity(cityInfo.id);
 
   const bbox = useMemo<[number, number, number, number]>(() => {
-    if (!planner) return [16.28, 48.17, 16.43, 48.24];
+    if (!planner) return [13.09, 52.34, 13.76, 52.68];
     const b = planner.index.bezirke.filter((x) => !x.transit && cityOf(x) === cityInfo.id);
     if (!b.length) return cityInfo.bbox;
     return [Math.min(...b.map((x) => x.bbox[0])), Math.min(...b.map((x) => x.bbox[1])), Math.max(...b.map((x) => x.bbox[2])), Math.max(...b.map((x) => x.bbox[3]))];
@@ -354,7 +355,7 @@ export function App() {
       <header className="topbar">
         <Wordmark />
         {cities.length > 1 ? (
-          <select className="badge city-select top" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+          <select className="badge city-select top" aria-label="Stadt wählen" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
             {cities.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -488,16 +489,6 @@ export function App() {
                 </button>
               ) : (
                 <>
-                  {/* Stadtwahl direkt in der Leiste, damit sie am Handy ohne Aufklappen erreichbar ist */}
-                  {cities.length > 1 && (
-                    <select className="city-select chip" aria-label="Stadt wählen" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
-                      {cities.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
                   <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
                     <Icon name="search" size={18} /> Wohin?
                   </button>
@@ -544,15 +535,6 @@ export function App() {
           )}
 
           <div className="time-row">
-            {cities.length > 1 && (
-              <select className="badge city-select inline" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
-                {cities.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
             <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? 'dunkel' : 'hell'}</span>
             <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
               {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾

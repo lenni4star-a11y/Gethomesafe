@@ -1405,15 +1405,22 @@ a.btn {
 }
 
 /* Stadtwahl: oben nur auf breiten Bildschirmen, sonst im Menü neben „hell/dunkel“ */
-.city-select.inline {
-  display: none;
-}
-@media (max-width: 520px) {
-  .city-select.top {
-    display: none;
+/* Kleine Bildschirme: Stadtwahl bleibt oben neben „goodway.“; der Bewertungen-Knopf rückt dafür unter die Kopfleiste */
+@media (max-width: 420px) {
+  .topbar {
+    gap: 6px;
+    padding: 4px 6px 4px 12px;
   }
-  .city-select.inline {
-    display: inline-block;
+  .topbar .city-select.top {
+    font-size: 0.8rem;
+    padding-left: 8px;
+  }
+  .ratings-btn {
+    top: calc(env(safe-area-inset-top) + 66px);
+    right: auto;
+    left: 12px;
+  }  .map-legend {
+    top: calc(env(safe-area-inset-top) + 124px);
   }
 }
 
