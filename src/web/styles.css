@@ -759,12 +759,15 @@ input {
 }
 
 .place-marker {
-  width: 16px;
-  height: 16px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border-radius: 50%;
   border: 2px solid #15131f;
   background: #5ee0b0;
+  color: #15131f;
   box-shadow: 0 0 0 2px #5ee0b0;
   font-size: 0;
   line-height: 1;
@@ -774,6 +777,10 @@ input {
 .cat-police {
   background: #7fb2ff;
   box-shadow: 0 0 0 2px #7fb2ff;
+}
+
+.map.far .place-marker svg {
+  display: none;
 }
 
 .map.far .place-marker {
@@ -2747,4 +2754,119 @@ a.btn {
 .tr-ride {
   display: grid;
   gap: 3px;
+}
+
+/* ---------------------------------------------------------------- Verkehrsmittel-Reiter (wie in Karten-Apps) */
+.mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.mode-tab {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink, #f4f1ff);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mode-tab .mt-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mode-tab .mt-time {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mode-tab.active {
+  border-color: var(--accent);
+  background: rgba(199, 184, 255, 0.16);
+}
+
+.mode-tab.active .mt-time {
+  color: var(--accent);
+}
+
+.route-card.wide {
+  grid-column: 1 / -1;
+}
+
+/* Gefühl unterwegs: fünf Balken von Rot bis Grün statt einer Note */
+.feel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.feel-bars {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.feel-bars span {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.feel.compact .feel-bars span {
+  width: 7px;
+  height: 7px;
+}
+
+.mode-panel {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.mode-estimate {
+  margin: 0;
+}
+
+.ride-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.ride-buttons .btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+.ride-buttons .btn small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 360px) {
+  .mode-tab .mt-name {
+    font-size: 0.78rem;
+  }
 }

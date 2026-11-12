@@ -93,7 +93,7 @@ export function RouteOverview({ route, onFocus }: Props) {
 function TransitOverview({ route }: { route: RouteSummary }) {
   const legs = route.transit?.legs ?? [];
   let ride = 0;
-  const color = (line: string, mode: number) => lineColor(line, mode);
+  const color = (l: { line: string; mode: number; color?: string }) => l.color ?? lineColor(l.line, l.mode);
   return (
     <section className="overview" aria-labelledby="overview-h">
       <h3 id="overview-h">Weg im Überblick</h3>
@@ -108,7 +108,7 @@ function TransitOverview({ route }: { route: RouteSummary }) {
                 <WalkIcon /> {Math.max(1, Math.round(l.minutes))}
               </span>
             ) : (
-              <LineBadge line={l.line} mode={l.mode} color={color(l.line, l.mode)} />
+              <LineBadge line={l.line} mode={l.mode} color={color(l)} />
             )}
           </span>
         ))}
@@ -125,7 +125,7 @@ function TransitOverview({ route }: { route: RouteSummary }) {
                 </span>
               </li>
             );
-          const c = color(l.line, l.mode);
+          const c = color(l);
           ride++;
           return (
             <li key={i} className="tr-step">

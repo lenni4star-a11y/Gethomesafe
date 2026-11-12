@@ -70,10 +70,18 @@ export function Wordmark() {
   );
 }
 
+/** Schrift auf hellen Linienfarben (z. B. Berliner U4 gelb) dunkel, sonst weiß */
+export function textOn(hex: string): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return '#fff';
+  const [r, g, b] = m.slice(1).map((v) => parseInt(v, 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 165 ? '#15131f' : '#fff';
+}
+
 /** Linien-Schild wie bei den Wiener Linien: U-Bahn eckig, Bim/Bus abgerundet, in der Linienfarbe */
 export function LineBadge({ line, mode, color }: { line: string; mode: number; color: string }) {
   return (
-    <span className={`line-badge${mode === 1 ? ' ubahn' : ''}`} style={{ background: color }}>
+    <span className={`line-badge${mode === 1 ? ' ubahn' : ''}`} style={{ background: color, color: textOn(color) }}>
       {line}
     </span>
   );

@@ -42,9 +42,19 @@ const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'gebiet.json
 const CITIES = [
   { id: 'wien', name: 'Wien', pilot: config.bezirke, durchgang: config.durchgang ?? [], offset: 0, prefix: 'bezirk' },
   ...(config.linz ? [{ id: 'linz', name: 'Linz', pilot: config.linz.bezirke, durchgang: config.linz.durchgang ?? [], offset: 100, prefix: 'linz' }] : []),
+  // Berlin: ganze Stadt (alle 97 Ortsteile), weil man vom Feiern überallhin heimfährt
+  ...(config.berlin ? [{ id: 'berlin', name: 'Berlin', pilot: config.berlin.ortsteile ?? 'alle', durchgang: [], offset: 200, prefix: 'berlin' }] : []),
 ];
+const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5 };
 
-const PBF_URL = { wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf', linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf' };
+const PBF_URL = {
+  wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf',
+  linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf',
+  berlin: 'https://download.bbbike.org/osm/bbbike/Berlin/Berlin.osm.pbf',
+};
+// Berlin (Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0): Ortsteile und öffentliche Beleuchtung
+const BERLIN_OT = 'https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326';
+const BERLIN_LAMPS = 'https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=beleuchtung:beleuchtung&outputFormat=application/json&srsName=EPSG:4326';
 const LINZ_GML = 'https://data.linz.gv.at/katalog/geodata/statistisch_bezirke/2014/StatBez_Linz_EPSG_4326.gml';
 const LINZ_NAMES = ['Innere Stadt', 'Urfahr', 'Pöstlingberg', 'St. Magdalena', 'Dornach-Auhof', 'Kaplanhof', 'Franckviertel', 'Bulgariplatz', 'Froschberg', 'Bindermichl-Keferfeld', 'Spallerhof', 'Neue Heimat', 'Kleinmünchen-Auwiesen', 'Industriegebiet-Hafen', 'Ebelsberg', 'Pichling'];
 const WFS = 'https://data.wien.gv.at/daten/geo?service=WFS&request=GetFeature&version=1.1.0&srsName=EPSG:4326&outputFormat=json&typeName=ogdwien:';
@@ -65,10 +75,10 @@ async function download(url, file) {
 
 const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 
-// Lokale Projektion in Meter (für Wien ausreichend genau)
-const LAT0 = 48.2;
-const MX = 111320 * Math.cos((LAT0 * Math.PI) / 180);
+// Lokale Projektion in Meter, je Stadt auf deren Breitengrad eingestellt (siehe setProjection)
+let MX = 111320 * Math.cos((48.2 * Math.PI) / 180);
 const MY = 110540;
+const setProjection = (lat) => (MX = 111320 * Math.cos((lat * Math.PI) / 180));
 const toXY = ([lon, lat]) => [lon * MX, lat * MY];
 const dist = (a, b) => Math.hypot((a[0] - b[0]) * MX, (a[1] - b[1]) * MY);
 
@@ -256,10 +266,47 @@ async function linzDistricts() {
   return out;
 }
 
+/** Ortsteile von Berlin (97), nummeriert nach dem amtlichen Schlüssel */
+async function berlinDistricts() {
+  const d = readJson(await download(BERLIN_OT, 'berlin-ortsteile.json'));
+  return d.features
+    .sort((a, b) => String(a.properties.sch).localeCompare(String(b.properties.sch)))
+    .map((f, i) => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      // größte Teilfläche nehmen (Inseln usw. fallen weg)
+      polys.sort((a, b) => b[0].length - a[0].length);
+      return { nr: i + 1, name: f.properties.nam, poly: polys[0] };
+    });
+}
+
+/** Alle öffentlichen Leuchten in Berlin (ca. 210.000), seitenweise abgefragt; ohne Schaltkästen und außer Betrieb */
+async function berlinLamps() {
+  const file = path.join(RAW, 'berlin-leuchten.json');
+  if (fs.existsSync(file) && !REFRESH) return readJson(file);
+  const out = [];
+  const types = new Map();
+  for (let start = 0; ; start += 10000) {
+    const res = await fetch(`${BERLIN_LAMPS}&count=10000&startIndex=${start}&sortBy=id`);
+    if (!res.ok) throw new Error('Berliner Leuchten: ' + res.status);
+    const feats = (await res.json()).features ?? [];
+    for (const f of feats) {
+      const p = f.properties ?? {};
+      types.set(p.leuchtentyp, (types.get(p.leuchtentyp) ?? 0) + 1);
+      if (/schaltkasten/i.test(p.leuchtentyp ?? '')) continue;
+      if (p.status && !/in betrieb/i.test(p.status) && !/sanierung \(in/i.test(p.status)) continue;
+      const c = f.geometry?.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry?.coordinates;
+      if (c) out.push([+c[0].toFixed(6), +c[1].toFixed(6)]);
+    }
+    log(`  Berliner Leuchten: ${start + feats.length} gelesen`);
+    if (feats.length < 10000) break;
+  }
+  log('  Typen:', [...types].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, n]) => `${k} ${n}`).join(', '));
+  fs.writeFileSync(file, JSON.stringify(out));
+  return out;
+}
+
 async function buildCity(city, acc) {
-  const PILOT = city.pilot.map(Number);
-  const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
-  const BEZIRKE = [...PILOT, ...TRANSIT];
+  setProjection(LAT[city.id] ?? 48.2);
   log(`===== ${city.name} =====`);
 
   // 1. Bezirksgrenzen
@@ -270,14 +317,18 @@ async function buildCity(city, acc) {
       name: f.properties.NAMEK,
       poly: f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates[0],
     }));
-  } else raw = await linzDistricts();
+  } else if (city.id === 'linz') raw = await linzDistricts();
+  else raw = await berlinDistricts();
+  const PILOT = city.pilot === 'alle' ? raw.map((b) => b.nr) : city.pilot.map(Number);
+  const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
+  const BEZIRKE = [...PILOT, ...TRANSIT];
   const bezirke = raw
     .filter((b) => BEZIRKE.includes(b.nr))
     .map((b) => ({ ...b, local: b.nr, nr: b.nr + city.offset, transit: TRANSIT.includes(b.nr) }));
   const missing = BEZIRKE.filter((n) => !bezirke.some((b) => b.local === n));
   if (missing.length) throw new Error(`Unbekannte Bezirksnummern für ${city.name} in config/gebiet.json: ` + missing.join(', '));
   for (const b of bezirke) b.bbox = bboxOf(b.poly[0]);
-  log('Bezirke:', bezirke.map((b) => `${b.local}. ${b.name}`).join(', '));
+  log(`Bezirke (${bezirke.length}):`, bezirke.map((b) => `${b.local}. ${b.name}`).join(', '));
 
   const pad = 400; // Meter Rand um das Gebiet
   const all = bboxOf(bezirke.flatMap((b) => [[b.bbox[0], b.bbox[1]], [b.bbox[2], b.bbox[3]]]));
@@ -288,13 +339,19 @@ async function buildCity(city, acc) {
   for (const b of bezirke) bezGrid.addBox(b.bbox, b);
   const bezirkAt = (pt) => bezGrid.at(pt[0], pt[1]).find((b) => pointInPolygon(pt, b.poly));
 
-  // 2. Leuchten der Stadt Wien (für Linz gibt es keine offenen Leuchtenstandorte)
+  // 2. Leuchten der Stadt (Wien, Berlin; für Linz gibt es keine offenen Leuchtenstandorte)
   const lampGrid = new Grid(25);
   let lampCount = 0;
   if (city.id === 'wien') {
     const lampFile = await download(WFS + 'LAMPENTAUSCHOGD&propertyName=SHAPE', 'leuchten.json');
     for (const f of readJson(lampFile).features) {
       const [lon, lat] = f.geometry.coordinates;
+      if (!inArea(lon, lat)) continue;
+      lampGrid.add(lon, lat, [lon, lat]);
+      lampCount++;
+    }
+  } else if (city.id === 'berlin') {
+    for (const [lon, lat] of await berlinLamps()) {
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
       lampCount++;
@@ -424,7 +481,7 @@ async function buildCity(city, acc) {
         name: s.name,
         type: s.type,
         lines,
-        night: lines.some((l) => /^N\d/.test(l) || (isWien && /^U\d$/.test(l))),
+        night: lines.some((l) => /^N\d/.test(l) || ((isWien || city.id === 'berlin') && /^U\d$/.test(l))),
         bezirk: s.bezirk,
         city: city.id,
         lon: +(s.sx / s.n).toFixed(5),
@@ -435,7 +492,16 @@ async function buildCity(city, acc) {
   // Ungefähre Betriebszeiten (vereinfacht, ohne Feiertage).
   // Wien: U-Bahn bis ca. 0:30, in Nächten vor Samstag, Sonntag durchgehend; Nachtlinien ca. 0:30–5:00.
   // Linz: Straßenbahn und Bus ca. 5:00–0:30 (Nachtlinien am Wochenende hier nicht berücksichtigt).
-  const STOP_HOURS = isWien
+  const STOP_HOURS =
+    city.id === 'berlin'
+      ? // Berlin: U-Bahn in Nächten vor Samstag und Sonntag durchgehend, sonst bis ca. 1 Uhr; Nachtbusse/Metro-Trams vereinfacht wie Tagbetrieb bis 1 Uhr
+        {
+          ubahn: 'Mo-Fr 04:30-24:00; Mo-Fr 00:00-01:00; Sa,Su 00:00-24:00',
+          sbahn: 'Mo-Fr 04:30-24:00; Mo-Fr 00:00-01:00; Sa,Su 00:00-24:00',
+          tram: 'Mo-Su 04:30-24:00; Mo-Su 00:00-01:00',
+          bus: 'Mo-Su 04:30-24:00; Mo-Su 00:00-01:00',
+        }
+      : isWien
     ? {
         ubahn: 'Mo-Fr 05:00-24:00; Sa,Su 00:00-24:00; Mo-Fr 00:00-00:30',
         sbahn: 'Mo-Su 04:30-24:00; Mo-Su 00:00-00:30',
@@ -507,7 +573,8 @@ async function buildCity(city, acc) {
       // Linz: Haltestellen aus OpenStreetMap
       const t = item.tags;
       if (!isWien && t.name && (t.highway === 'bus_stop' || t.railway === 'tram_stop' || t.public_transport === 'platform' || t.railway === 'station' || t.railway === 'halt')) {
-        const type = t.railway === 'station' || t.railway === 'halt' || t.train === 'yes' ? 'sbahn' : t.railway === 'tram_stop' || t.tram === 'yes' ? 'tram' : 'bus';
+        const type =
+          t.subway === 'yes' || t.station === 'subway' ? 'ubahn' : t.railway === 'station' || t.railway === 'halt' || t.train === 'yes' ? 'sbahn' : t.railway === 'tram_stop' || t.tram === 'yes' ? 'tram' : 'bus';
         addStop(t.name, item.lon, item.lat, type, (t.route_ref ?? '').split(/[;,]/).map((l) => l.trim()).filter(Boolean));
       }
     }
@@ -702,7 +769,9 @@ async function buildCity(city, acc) {
   index.attribution.push(
     isWien
       ? 'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen'
-      : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
+      : city.id === 'berlin'
+        ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung'
+        : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
   if (mlyCount) acc.mapillary = true;
   index.cities.push({

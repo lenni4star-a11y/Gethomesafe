@@ -1,6 +1,8 @@
-// Baut den Öffi-Fahrplan für die App aus den offenen GTFS-Daten der Wiener Linien.
+// Baut den Öffi-Fahrplan für die App aus offenen GTFS-Daten:
+//  - Wien: Wiener Linien Open Data (CC BY 4.0) → public/data/transit.json
+//  - Berlin: VBB Verkehrsverbund Berlin-Brandenburg (CC BY 4.0) → public/data/transit-berlin.json
 //
-// Ergebnis: public/data/transit.json mit
+// Ergebnis je Stadt:
 //  - Haltestellen im Gebiet (Name, Lage, ob gut beleuchtet)
 //  - Linienverläufen („Mustern“): Haltestellenfolge, Fahrzeit ab erster Haltestelle
 //  - Abfahrtszeiten je Tagestyp (Mo–Do, Fr, Sa, So/Feiertag), inkl. Nachtbetrieb (Zeiten über 24:00)
@@ -16,11 +18,57 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = path.join(ROOT, 'data-raw');
 const OUT = path.join(ROOT, 'public', 'data');
-const GTFS_URL = 'https://www.wienerlinien.at/ogd_realtime/doku/ogd/gtfs/gtfs.zip';
 const REFRESH = process.argv.includes('--refresh');
 const log = (...a) => console.log('[öffis]', ...a);
 
-const MX = 111320 * Math.cos((48.2 * Math.PI) / 180);
+// Je Stadt: GTFS-Quelle, Datei, Leuchten (für „Haltestelle beleuchtet“), feste Feiertage (MMTT) zum Meiden der Beispieltage
+const FEEDS = {
+  wien: {
+    url: 'https://www.wienerlinien.at/ogd_realtime/doku/ogd/gtfs/gtfs.zip',
+    dir: 'gtfs',
+    out: 'transit.json',
+    source: 'Wiener Linien Open Data (CC BY 4.0)',
+    lat: 48.2,
+    lamps: () => JSON.parse(fs.readFileSync(path.join(RAW, 'leuchten.json'), 'utf8')).features.map((f) => f.geometry.coordinates),
+    holidays: ['0101', '0106', '0501', '0815', '1026', '1101', '1208', '1224', '1225', '1226', '1231'],
+  },
+  berlin: {
+    url: 'https://www.vbb.de/vbbgtfs',
+    dir: 'gtfs-berlin',
+    out: 'transit-berlin.json',
+    source: 'VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY 4.0)',
+    lat: 52.5,
+    lamps: () => JSON.parse(fs.readFileSync(path.join(RAW, 'berlin-leuchten.json'), 'utf8')),
+    holidays: ['0101', '0308', '0501', '1003', '1031', '1224', '1225', '1226', '1231'],
+  },
+};
+
+// Linienfarben für Berlin (BVG/S-Bahn, von Hand gewählt, falls das GTFS keine Farbe liefert)
+const BERLIN_COLORS = { U1: '7dad4c', U2: 'da421e', U3: '16683d', U4: 'f0d722', U5: '7e5330', U6: '8c6dab', U7: '528dba', U8: '224f86', U9: 'f3791d' };
+function routeColor(city, name, type, gtfsColor) {
+  if (city !== 'berlin') return null;
+  if (BERLIN_COLORS[name]) return BERLIN_COLORS[name];
+  if (gtfsColor && /^[0-9a-f]{6}$/i.test(gtfsColor) && gtfsColor.toLowerCase() !== 'ffffff') return gtfsColor.toLowerCase();
+  if (/^S\d/.test(name)) return '008d4f';
+  if (/^N/.test(name)) return '1c1f3a';
+  if (type === 0) return 'be1414';
+  if (type === 3) return 'a5027d';
+  return null;
+}
+
+/** Erweiterte GTFS-Verkehrsmittel (z. B. VBB: 100 Zug, 400 U-Bahn, 700 Bus, 900 Tram) auf die einfachen Typen 0–7 abbilden */
+function baseType(t) {
+  if (t < 100) return t;
+  if (t >= 100 && t < 200) return 2;
+  if (t >= 400 && t < 500) return 1;
+  if (t >= 700 && t < 900) return 3;
+  if (t >= 900 && t < 1000) return 0;
+  if (t >= 1000 && t < 1100) return 4;
+  if (t >= 1300 && t < 1400) return 6;
+  return 3;
+}
+
+let MX = 111320 * Math.cos((48.2 * Math.PI) / 180);
 const MY = 110540;
 const dist = (a, b) => Math.hypot((a[0] - b[0]) * MX, (a[1] - b[1]) * MY);
 
@@ -63,14 +111,14 @@ const toMin = (t) => {
   return h * 60 + m;
 };
 
-async function ensureGtfs() {
-  const dir = path.join(RAW, 'gtfs');
+async function ensureGtfs(feed) {
+  const dir = path.join(RAW, feed.dir);
   if (fs.existsSync(path.join(dir, 'stop_times.txt')) && !REFRESH) return dir;
   fs.mkdirSync(dir, { recursive: true });
-  log('lade', GTFS_URL);
-  const res = await fetch(GTFS_URL);
+  log('lade', feed.url);
+  const res = await fetch(feed.url);
   if (!res.ok) throw new Error('GTFS-Download fehlgeschlagen: ' + res.status);
-  const zip = path.join(RAW, 'gtfs.zip');
+  const zip = path.join(RAW, feed.dir + '.zip');
   fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
   const { execFileSync } = await import('node:child_process');
   execFileSync('unzip', ['-o', '-q', zip, '-d', dir]);
@@ -81,14 +129,16 @@ function ymd(d) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 }
 
-async function main() {
-  const index = JSON.parse(fs.readFileSync(path.join(OUT, 'index.json'), 'utf8'));
-  // Gebiet: alle Wiener Bezirke aus dem Datenbau plus 500 m Rand (der Fahrplan gilt nur für Wien)
-  const all = index.bezirke.filter((b) => (b.city ?? 'wien') === 'wien').reduce((a, b) => [Math.min(a[0], b.bbox[0]), Math.min(a[1], b.bbox[1]), Math.max(a[2], b.bbox[2]), Math.max(a[3], b.bbox[3])], [180, 90, -180, -90]);
+async function buildFeed(city, index) {
+  const feed = FEEDS[city];
+  MX = 111320 * Math.cos((feed.lat * Math.PI) / 180);
+  log(`===== ${city} =====`);
+  // Gebiet: alle Bezirke der Stadt aus dem Datenbau plus 500 m Rand
+  const all = index.bezirke.filter((b) => (b.city ?? 'wien') === city).reduce((a, b) => [Math.min(a[0], b.bbox[0]), Math.min(a[1], b.bbox[1]), Math.max(a[2], b.bbox[2]), Math.max(a[3], b.bbox[3])], [180, 90, -180, -90]);
   const AREA = [all[0] - 500 / MX, all[1] - 500 / MY, all[2] + 500 / MX, all[3] + 500 / MY];
   const inArea = (lon, lat) => lon >= AREA[0] && lon <= AREA[2] && lat >= AREA[1] && lat <= AREA[3];
 
-  const dir = await ensureGtfs();
+  const dir = await ensureGtfs(feed);
 
   // 1. Tagestypen: je ein typischer Tag in der Zukunft (Di für Mo–Do, Fr, Sa, So)
   const calendar = [];
@@ -107,7 +157,7 @@ async function main() {
   for (const [type, wd] of Object.entries(DAYS)) {
     const d = new Date(start);
     // nächster passender Tag, der kein (fester) Feiertag ist; die Tage um Weihnachten meiden
-    const HOLIDAYS = ['0101', '0106', '0501', '0815', '1026', '1101', '1208', '1224', '1225', '1226', '1231'];
+    const HOLIDAYS = feed.holidays;
     for (let i = 0; i < 60; i++) {
       if (d.getDay() === wd && !HOLIDAYS.includes(ymd(d).slice(4)) && ymd(d) <= feedEnd) break;
       d.setDate(d.getDate() + 1);
@@ -126,8 +176,13 @@ async function main() {
   }
   log('Beispieltage:', picked);
 
-  // 2. Haltestellen im Gebiet, mit Beleuchtung (Leuchten der Stadt Wien im Umkreis von 30 m)
-  const lamps = JSON.parse(fs.readFileSync(path.join(RAW, 'leuchten.json'), 'utf8')).features.map((f) => f.geometry.coordinates);
+  // 2. Haltestellen im Gebiet, mit Beleuchtung (Leuchten der Stadt im Umkreis von 30 m)
+  let lamps = [];
+  try {
+    lamps = feed.lamps();
+  } catch {
+    log('Keine Leuchtendaten gefunden: Haltestellen gelten als „Beleuchtung unbekannt“.');
+  }
   const lampCell = new Map();
   for (const c of lamps) {
     if (!inArea(c[0], c[1])) continue;
@@ -155,7 +210,10 @@ async function main() {
 
   // 3. Linien und Fahrten
   const routes = new Map();
-  for await (const r of readCsv(path.join(dir, 'routes.txt'))) routes.set(r.route_id, { name: r.route_short_name, type: +r.route_type });
+  for await (const r of readCsv(path.join(dir, 'routes.txt'))) {
+    const type = baseType(+r.route_type);
+    routes.set(r.route_id, { name: r.route_short_name || r.route_long_name, type, color: routeColor(city, r.route_short_name, type, r.route_color) });
+  }
   const tripInfo = new Map();
   const anyActive = new Set(Object.values(activeServices).flatMap((s) => [...s]));
   for await (const r of readCsv(path.join(dir, 'trips.txt'))) {
@@ -204,11 +262,11 @@ async function main() {
   for (const p of patterns.values()) {
     const total = Object.values(p.deps).reduce((s, d) => s + d.length, 0);
     if (!total) continue;
-    const r = routes.get(p.route) ?? { name: '?', type: 3 };
+    const r = routes.get(p.route) ?? { name: '?', type: 3, color: null };
     const rk = `${r.name}|${r.type}`;
     if (!routeIdx.has(rk)) {
       routeIdx.set(rk, routeList.length);
-      routeList.push([r.name, r.type]);
+      routeList.push(r.color ? [r.name, r.type, '#' + r.color] : [r.name, r.type]);
     }
     const deps = {};
     for (const [type, d] of Object.entries(p.deps)) deps[type] = [...new Set(d)].sort((a, b) => a - b);
@@ -216,7 +274,7 @@ async function main() {
   }
   const transit = {
     generated: new Date().toISOString(),
-    source: 'Wiener Linien Open Data (CC BY 4.0)',
+    source: feed.source,
     days: picked,
     validUntil: feedEnd,
     stops,
@@ -224,8 +282,26 @@ async function main() {
     patterns: out,
   };
   const json = JSON.stringify(transit);
-  fs.writeFileSync(path.join(OUT, 'transit.json'), json);
-  log(`fertig: ${out.length} Linienverläufe, ${routeList.length} Linien, ${(json.length / 1e6).toFixed(1)} MB → public/data/transit.json`);
+  fs.writeFileSync(path.join(OUT, feed.out), json);
+  log(`fertig: ${out.length} Linienverläufe, ${routeList.length} Linien, ${(json.length / 1e6).toFixed(1)} MB → public/data/${feed.out}`);
+}
+
+async function main() {
+  const index = JSON.parse(fs.readFileSync(path.join(OUT, 'index.json'), 'utf8'));
+  const cities = new Set(index.bezirke.map((b) => b.city ?? 'wien'));
+  for (const city of Object.keys(FEEDS)) {
+    if (!cities.has(city)) continue;
+    try {
+      await buildFeed(city, index);
+      const c = index.cities?.find((x) => x.id === city);
+      if (c) c.transit = true;
+    } catch (e) {
+      // Wien muss klappen; bei anderen Städten geht es notfalls ohne Fahrplan weiter
+      if (city === 'wien') throw e;
+      log(`Fahrplan für ${city} fehlgeschlagen, die App zeigt dort keine Öffi-Routen:`, e.message);
+    }
+  }
+  fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(index));
 }
 
 main().catch((e) => {

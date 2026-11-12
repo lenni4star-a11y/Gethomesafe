@@ -1,11 +1,44 @@
 {
   "_hinweis": "Bezirke des Pilotgebiets in Wien (Nummern 1 bis 23). Start und Ziel müssen in diesen Bezirken liegen. Nach einer Änderung einmal 'npm run data' ausführen.",
-  "bezirke": [2, 4, 5, 6, 7, 8, 9, 15, 16],
+  "bezirke": [
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    15,
+    16
+  ],
   "_hinweis_durchgang": "Durchgangs-Bezirke: Hier können Routen durchführen (z. B. vom 7. in den 2. Bezirk durch die Innere Stadt), Start und Ziel sind dort aber nicht vorgesehen.",
-  "durchgang": [1, 3],
+  "durchgang": [
+    1,
+    3
+  ],
   "linz": {
     "_hinweis": "Statistische Bezirke von Linz (1 Innere Stadt, 2 Urfahr, 3 Pöstlingberg, 4 St. Magdalena, 5 Dornach-Auhof, 6 Kaplanhof, 7 Franckviertel, 8 Bulgariplatz, 9 Froschberg, 10 Bindermichl-Keferfeld, 11 Spallerhof, 12 Neue Heimat, 13 Kleinmünchen-Auwiesen, 14 Industriegebiet-Hafen, 15 Ebelsberg, 16 Pichling).",
-    "bezirke": [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-    "durchgang": [3, 14]
+    "bezirke": [
+      1,
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "durchgang": [
+      3,
+      14
+    ]
+  },
+  "berlin": {
+    "_hinweis": "Berlin: ganze Stadt (alle 97 Ortsteile), weil man vom Feiern überallhin heimfährt. Statt 'alle' kann hier auch eine Liste von Ortsteil-Nummern stehen.",
+    "ortsteile": "alle"
   }
 }

@@ -16,8 +16,8 @@ export interface TransitData {
   validUntil: string;
   /** [Name, lon, lat, beleuchtet 1/0] */
   stops: [string, number, number, number][];
-  /** [Liniennummer, GTFS-Verkehrsmittel] */
-  routes: [string, number][];
+  /** [Liniennummer, GTFS-Verkehrsmittel, Linienfarbe (optional, z. B. Berlin)] */
+  routes: [string, number, string?][];
   patterns: { r: number; h: string; s: number[]; o: number[]; d: Record<DayType, number[]> }[];
 }
 
@@ -40,6 +40,8 @@ export interface RideLeg {
   line: string;
   /** 0 Straßenbahn, 1 U-Bahn, 2 Zug, 3 Bus */
   mode: number;
+  /** Linienfarbe aus den Daten (sonst lineColor) */
+  color?: string;
   headsign: string;
   from: TransitStop;
   to: TransitStop;
@@ -284,12 +286,13 @@ export class TransitNetwork {
         continue;
       }
       const pat = this.data.patterns[p.pattern];
-      const [line, mode] = this.data.routes[pat.r];
+      const [line, mode, color] = this.data.routes[pat.r];
       const departMin = p.base + pat.o[p.board];
       legs.unshift({
         type: 'ride',
         line,
         mode,
+        color,
         headsign: pat.h,
         from: this.stops[pat.s[p.board]],
         to: this.stops[pat.s[p.alight]],

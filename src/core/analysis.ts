@@ -190,7 +190,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   if (ctx.dark && litLen.yes > 0) {
     const parts = [
       litSources.osm >= 0.05 ? `${pct(litSources.osm)} % laut OpenStreetMap` : null,
-      litSources.stadt >= 0.05 ? `${pct(litSources.stadt)} % laut Leuchtenstandorten der Stadt Wien` : null,
+      litSources.stadt >= 0.05 ? `${pct(litSources.stadt)} % laut Leuchtenstandorten der Stadt` : null,
       litSources.mapillary >= 0.05 ? `${pct(litSources.mapillary)} % Laternen auf Mapillary-Fotos erkannt` : null,
     ].filter(Boolean);
     if (parts.length) reasons.push(`Beleuchtung: ${parts.join(', ')}`);

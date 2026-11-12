@@ -1,20 +1,37 @@
 import OpeningHours from 'opening_hours';
 import type { Poi } from './types';
 
-// Feiertage in Wien berücksichtigen
-const NOMINATIM = { lat: 48.2, lon: 16.37, address: { country_code: 'at', state: 'Wien' } };
+// Feiertage („PH“ in Öffnungszeiten) je Stadt: Österreich, Deutschland, Schweiz unterscheiden sich
+const REGIONS: Record<string, { lat: number; lon: number; address: { country_code: string; state: string } }> = {
+  wien: { lat: 48.2, lon: 16.37, address: { country_code: 'at', state: 'Wien' } },
+  linz: { lat: 48.3, lon: 14.29, address: { country_code: 'at', state: 'Oberösterreich' } },
+  berlin: { lat: 52.52, lon: 13.4, address: { country_code: 'de', state: 'Berlin' } },
+  zuerich: { lat: 47.37, lon: 8.54, address: { country_code: 'ch', state: 'Zürich' } },
+};
+let region = 'wien';
+
+/** Stadt für die Feiertage festlegen (macht der Planer vor jeder Route) */
+export function setHolidayRegion(city: string) {
+  region = REGIONS[city] ? city : 'wien';
+}
 
 const cache = new Map<string, OpeningHours | null>();
 
 function parse(oh: string): OpeningHours | null {
-  if (!cache.has(oh)) {
-    try {
-      cache.set(oh, new OpeningHours(oh, NOMINATIM as never));
-    } catch {
-      cache.set(oh, null);
+  const key = `${region}|${oh}`;
+  if (!cache.has(key)) {
+    let value: OpeningHours | null = null;
+    for (const r of [region, 'wien']) {
+      try {
+        value = new OpeningHours(oh, REGIONS[r] as never);
+        break;
+      } catch {
+        value = null;
+      }
     }
+    cache.set(key, value);
   }
-  return cache.get(oh)!;
+  return cache.get(key)!;
 }
 
 export type OpenState = 'open' | 'closed' | 'unknown';
@@ -22,7 +39,7 @@ export type OpenState = 'open' | 'closed' | 'unknown';
 /** Ist der Ort zur gegebenen Zeit geöffnet? Fehlen Öffnungszeiten, ist das Ergebnis „unknown“. */
 export function openState(poi: Poi, date: Date): OpenState {
   if (!poi.oh) {
-    // Polizeiinspektionen und Notaufnahmen sind in Wien rund um die Uhr besetzt.
+    // Polizeiinspektionen und Notaufnahmen sind rund um die Uhr besetzt (in Wien geprüft; Berliner Polizeiabschnitte ebenso).
     if (poi.cat === 'police' || poi.cat === 'hospital') return 'open';
     return 'unknown';
   }
