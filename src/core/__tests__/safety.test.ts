@@ -22,17 +22,17 @@ describe('Farbstufen', () => {
 });
 
 describe('amtliche Kriminalitätsdaten', () => {
-  it('kleiner Abzug: höchstens etwa ein Punkt, abschaltbar, tagsüber halb so stark', () => {
+  it('Abzug: Stufe 3 etwa drei Punkte, abschaltbar, tagsüber halb so stark', () => {
     const pois = new Map();
     const base = edgeRisk(edge(), pois, createContext(night, true)).risk;
     const kbo = edgeRisk(edge({ crime: 3 }), pois, createContext(night, true)).risk;
     const off = edgeRisk(edge({ crime: 3 }), pois, createContext(night, true, { crimeData: false })).risk;
-    expect(kbo - base).toBeGreaterThan(0.1);
-    expect(kbo - base).toBeLessThan(0.16);
+    expect(kbo - base).toBeGreaterThan(0.3);
+    expect(kbo - base).toBeLessThan(0.36);
     expect(off).toBe(base);
     const day = new Date('2026-11-06T13:00:00+01:00');
     const dayDiff = edgeRisk(edge({ crime: 2 }), pois, createContext(day, false)).risk - edgeRisk(edge(), pois, createContext(day, false)).risk;
-    expect(dayDiff).toBeCloseTo(0.055, 2);
+    expect(dayDiff).toBeCloseTo(0.11, 2);
   });
 });
 

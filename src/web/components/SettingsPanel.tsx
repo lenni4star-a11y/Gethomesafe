@@ -40,14 +40,6 @@ export function SettingsPanel({ settings, onChange, onClose, children }: Props) 
           />
         </label>
         <p className="fineprint">Wege durch oder direkt neben Parks werden nachts abgewertet, aber nie ganz ausgeschlossen. Nachts zugesperrte Parks werden umgangen.</p>
-        <label className="check-row">
-          <input type="checkbox" checked={settings.crimeData !== false} onChange={(e) => onChange({ ...settings, crimeData: e.target.checked })} />
-          <span>Amtliche Kriminalitätsdaten berücksichtigen (Berlin)</span>
-        </label>
-        <p className="fineprint">
-          Kleiner Abzug (höchstens etwa eine Stufe) an kriminalitätsbelasteten Orten laut Polizei Berlin und in Gegenden mit mehr Straßenraub und Körperverletzung
-          laut Kriminalitätsatlas. Diese Daten sind grob und können Gegenden schlechter wirken lassen, als sie sich anfühlen – deshalb zählen sie nur wenig.
-        </p>
       </section>
 
       <section className="settings-section">

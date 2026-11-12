@@ -169,7 +169,7 @@ export function App() {
     setBusy(true);
     setMessage(null);
     planner
-      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, crimeData: settings.crimeData, ratings })
+      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings })
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
@@ -191,7 +191,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime, settings.parkAvoidance, settings.crimeData, ratings, city]);
+  }, [planner, start, end, customTime, settings.parkAvoidance, ratings, city]);
 
   // Bewertungen auf der Karte, gefiltert nach Wochentag und Uhrzeit
   const ratingTime = customTime ?? new Date();
@@ -442,7 +442,7 @@ export function App() {
           onReroute={async () => {
             const s = escort.session;
             if (!planner || !s?.destCoords || !escort.lastPos) return;
-            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, crimeData: settings.crimeData, ratings });
+            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings });
             if (!res) return;
             setPlan(res);
             setSelected('safest');

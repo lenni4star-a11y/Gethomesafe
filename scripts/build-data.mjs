@@ -93,6 +93,66 @@ async function zuerichDistricts() {
     .map((q, i) => ({ nr: i + 1, name: q.name, poly: q.poly }));
 }
 
+// Zürich: Polizeiliche Kriminalstatistik des Kantons je Stadtkreis (Open Data Zürich, CC BY), nur Delikte gegen
+// Leib und Leben und gegen die sexuelle Integrität, als Dichte pro km². Die 2 dichtesten Kreise → Stufe 2, die nächsten 3 → Stufe 1.
+const ZH_PKS = 'https://data.stadt-zuerich.ch/dataset/ktzh_pks_straftaten_tatbestandgruppe_gemeinden_stadtkreise/download/KTZH_00001202_00003600.csv';
+async function zuerichCrime() {
+  try {
+    const csv = fs.readFileSync(await download(ZH_PKS, 'zuerich-pks.csv'), 'utf8').replace(/^\uFEFF/, '');
+    const lines = csv.split(/\r?\n/).filter(Boolean);
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const split = (l) => l.split(sep).map((x) => x.replace(/^"|"$/g, '').trim());
+    const head = split(lines[0]);
+    const col = (re) => head.findIndex((h) => re.test(h));
+    const cArea = col(/gebiet|gemeinde|kreis/i), cYear = col(/jahr/i), cTitle = col(/^haupttitel$/i), cVal = col(/anzahl|straftaten|wert/i);
+    log('  PKS Zürich Spalten:', head.join(' | '));
+    const rows = lines.slice(1).map(split).filter((r) => /kreis/i.test(r[cArea] ?? ''));
+    const year = Math.max(...rows.map((r) => Number(r[cYear]) || 0));
+    const counts = new Map();
+    for (const r of rows) {
+      if (Number(r[cYear]) !== year || !/leib und leben|sexuell/i.test(r[cTitle] ?? '')) continue;
+      const k = Number((r[cArea].match(/kreis\s*(\d+)/i) ?? [])[1]);
+      if (k) counts.set(k, (counts.get(k) ?? 0) + (Number(r[cVal]) || 0));
+    }
+    const kreise = await wfsGeoJson(ZH_WFS('Stadtkreise', 'adm_stadtkreise_a'), 'zuerich-kreise.json');
+    const regions = [];
+    for (const f of kreise.features) {
+      const p = f.properties ?? {};
+      const k = Number(p.knr ?? p.KNR ?? p.kreis ?? String(Object.values(p).find((v) => /kreis\s*\d+/i.test(String(v))) ?? '').replace(/\D/g, ''));
+      if (!counts.has(k)) continue;
+      const polys = (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((pl) => pl.map((ring) => ring.map(lonLat)));
+      const km2 = polys.reduce((s, pl) => s + ringKm2(pl[0]), 0) || 1;
+      regions.push({ name: 'Kreis ' + k, polys, density: counts.get(k) / km2 });
+    }
+    regions.sort((a, b) => b.density - a.density);
+    regions.forEach((r, i) => (r.level = i < 2 ? 2 : i < 5 ? 1 : 0));
+    log(`  Kriminalstatistik Zürich ${year}: ${regions.length} Kreise, am dichtesten: ${regions.slice(0, 5).map((r) => r.name).join(', ')}`);
+    if (!regions.length) return null;
+    return (pt) => regions.find((r) => r.level && r.polys.some((p) => pointInPolygon(pt, p)))?.level ?? 0;
+  } catch (e) {
+    log('  Kriminalstatistik Zürich nicht verfügbar, ohne Abzug weiter:', e.message);
+    return null;
+  }
+}
+
+// Wien: Es gibt keine offenen Kriminalitätsdaten nach Grätzl oder Bezirk. Amtlich festgelegt sind die Waffenverbotszonen
+// der Landespolizeidirektion (befristet, mehrmals verlängert): Praterstern, Reumannplatz, Yppenplatz – als ungefähre Kreise, Stufe 3.
+const WIEN_WVZ = [
+  { name: 'Praterstern', at: [16.3913, 48.2186], r: 260 },
+  { name: 'Reumannplatz', at: [16.3779, 48.1747], r: 260 },
+  { name: 'Yppenplatz', at: [16.3361, 48.2131], r: 200 },
+];
+function wienCrime() {
+  return (pt) => (WIEN_WVZ.some((z) => dist(pt, z.at) <= z.r) ? 3 : 0);
+}
+
+/** Fläche eines Rings in km² (lokale Projektion) */
+function ringKm2(ring) {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += (ring[j][0] * MX - ring[i][0] * MX) * (ring[j][1] * MY + ring[i][1] * MY);
+  return Math.abs(a / 2) / 1e6;
+}
+
 async function zuerichLamps() {
   const d = await wfsGeoJson(ZH_WFS('Oeffentliche_Beleuchtung_der_Stadt_Zuerich', 'ewz_brennstelle_p'), 'zuerich-leuchten.json');
   return d.features.map((f) => (f.geometry?.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry?.coordinates)).filter(Boolean).map(lonLat);
@@ -456,7 +516,7 @@ async function buildCity(city, acc) {
     }
   }
   log('Leuchten der Stadt im Gebiet:', lampCount);
-  const crimeAt = city.id === 'berlin' ? await berlinCrime() : null;
+  const crimeAt = city.id === 'berlin' ? await berlinCrime() : city.id === 'zuerich' ? await zuerichCrime() : city.id === 'wien' ? wienCrime() : null;
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);

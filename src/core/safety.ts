@@ -14,10 +14,11 @@ export const WEIGHTS = {
   /** Aufschlag für Wege durch Parks / direkt neben Parks (nachts, tagsüber), wird mit der Einstellung multipliziert */
   park: { inside: { night: 0.45, day: 0.15 }, near: { night: 0.2, day: 0 } },
   /**
-   * Amtliche Kriminalitätsdaten (Berlin) als kleiner Aufschlag aufs Risiko: höchstens etwa ein Punkt auf der Skala 1–10
-   * (Wert = 10 − 9 × Risiko, also 0,11 Risiko ≈ 1 Punkt). Tagsüber halb so stark. Abschaltbar in den Einstellungen.
+   * Amtliche Kriminalitätsdaten (Berlin, Zürich, Wien) als Aufschlag aufs Risiko (Entscheidung der Projektinhaber·in, Nov. 2026):
+   * Stufe 1 ≈ 1 Punkt, Stufe 2 ≈ 2 Punkte, Stufe 3 (amtlich festgelegter Ort) ≈ 3 Punkte auf der Skala 1–10
+   * (Wert = 10 − 9 × Risiko, also 0,11 Risiko ≈ 1 Punkt). Tagsüber halb so stark. Immer aktiv (kein Schalter mehr).
    */
-  crime: { 1: 0.06, 2: 0.11, 3: 0.14 } as Record<number, number>,
+  crime: { 1: 0.11, 2: 0.22, 3: 0.33 } as Record<number, number>,
 };
 
 /** Einstellung „Parks meiden“ → Faktor */
