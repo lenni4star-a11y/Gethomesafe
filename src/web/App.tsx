@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { recommendTransit, type PlanResult, type Planner } from '../core/planner';
+import { type PlanResult, type Planner } from '../core/planner';
 import type { RouteMode } from '../core/routing';
 
 /** gewählte Route: zu Fuß sicherste / schnellste oder mit Öffis */
@@ -42,6 +42,7 @@ import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
 import { Icon, LineBadge, Wordmark } from './components/Icon';
 import { RouteOverview } from './components/RouteOverview';
+import { FeelMeter, RidePanel, rideMinutes, ScooterPanel, scooterMinutes, type TravelMode } from './components/TravelModes';
 import { emergencyText } from '../core/helplines';
 import { setCurrentCity } from './region';
 
@@ -57,6 +58,8 @@ export function App() {
   const [plan, setPlan] = useState<PlanResult | null>(null);
   const [planTime, setPlanTime] = useState<Date>(new Date());
   const [selected, setSelected] = useState<Selection>('safest');
+  /** Verkehrsmittel-Reiter wie in Karten-Apps; Standard: Öffis + zu Fuß */
+  const [mode, setMode] = useState<TravelMode>('transit');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
@@ -170,8 +173,14 @@ export function App() {
         else setSheet('collapsed');
         setPlan(res);
         // lange Strecke und Öffis deutlich schneller → Öffis gleich vorauswählen, sonst sicherste Fußroute
-        if (res && recommendTransit(res)) setSelected('transit');
-        else setSelected((cur) => (cur === 'transit' && !res?.transit ? 'safest' : cur));
+        // Standard ist „Öffis + zu Fuß“, wenn es eine Verbindung gibt (wie in Karten-Apps)
+        if (res?.transit) {
+          setSelected('transit');
+          setMode((m) => (m === 'walk' ? 'transit' : m));
+        } else {
+          setSelected((cur) => (cur === 'transit' ? 'safest' : cur));
+          setMode((m) => (m === 'transit' ? 'walk' : m));
+        }
         setPlanTime(when);
       })
       .catch(() => !cancelled && setMessage('Beim Berechnen ist etwas schiefgegangen. Bitte versuch es noch einmal.'))
@@ -237,8 +246,9 @@ export function App() {
   }, [streetMode, mlyToken]);
 
   useEffect(() => {
-    map.current?.showPlan(plan, selected, planTime);
-  }, [plan, selected, planTime]);
+    // Fahrdienst und Roller haben keine eigene Route: Karte zeigt dann nur Start und Ziel
+    map.current?.showPlan(mode === 'ride' || mode === 'scooter' ? null : plan, selected, planTime);
+  }, [plan, selected, planTime, mode]);
 
   const locate = useCallback((use: (p: Place) => void = setStart) => {
     if (!window.isSecureContext || !navigator.geolocation) {
@@ -295,7 +305,6 @@ export function App() {
       setShowSettings(true);
       return;
     }
-    setSelected('safest');
     setEnd({ ...home, label: 'Zuhause', kind: 'home' });
     if (!start) locate();
   }, [home, start, locate]);
@@ -317,7 +326,9 @@ export function App() {
 
   const isFavorite = !!end && favorites.some((f) => f.coords[0] === end.coords[0] && f.coords[1] === end.coords[1]);
 
-  const chosen = selected === 'transit' ? (plan?.transit ?? plan?.safest) : plan?.[selected];
+  const chosenRoute = selected === 'transit' ? (plan?.transit ?? plan?.safest) : plan?.[selected];
+  const chosen = mode === 'ride' || mode === 'scooter' ? undefined : chosenRoute;
+  const MODE_NAME: Record<TravelMode, string> = { transit: 'Öffis', walk: 'Zu Fuß', ride: 'Taxi & Fahrdienst', scooter: 'E-Roller' };
 
   // Restweg während der Begleitung (aus geplanter Route und letzter Position)
   const escortRemaining = useMemo(() => {
@@ -461,11 +472,19 @@ export function App() {
             <div className="collapsed-row">
               {chosen ? (
                 <button type="button" className="collapsed-main" onClick={() => setSheet('half')} aria-label="Routen-Menü öffnen">
-                  <small>{selected === 'safest' ? 'Sicherste Route' : selected === 'transit' && chosen.mode === 'transit' ? `Mit Öffis (${transitLines(chosen)})` : 'Schnellste Route'} · Wert {chosen.score}/10</small>
+                  <small>
+                    {selected === 'safest' ? 'Zu Fuß, sicherste Route' : selected === 'transit' && chosen.mode === 'transit' ? `Öffis (${transitLines(chosen)})` : 'Zu Fuß, schnellste Route'} ·{' '}
+                    <FeelMeter score={chosen.score} compact />
+                  </small>
                   <b>
                     {formatDuration(chosen.seconds)} · {formatDistance(chosen.length)}
                     {chosen.mode === 'transit' ? ' zu Fuß' : ''}
                   </b>
+                </button>
+              ) : plan && start && end ? (
+                <button type="button" className="collapsed-main" onClick={() => setSheet('half')} aria-label="Routen-Menü öffnen">
+                  <small>{MODE_NAME[mode]}</small>
+                  <b>ca. {formatDuration((mode === 'ride' ? rideMinutes(start.coords, end.coords) : scooterMinutes(start.coords, end.coords)) * 60)}</b>
                 </button>
               ) : (
                 <button type="button" className="collapsed-main where" onClick={() => setSheet('half')}>
@@ -529,51 +548,98 @@ export function App() {
 
           {plan && (
             <>
-              <div className="route-cards three" role="radiogroup" aria-label="Route wählen">
-                {(['safest', 'fastest', 'transit'] as const).map((m) => {
-                  const r = m === 'transit' ? plan.transit : plan[m];
-                  if (!r)
-                    return (
-                      <button key={m} type="button" role="radio" aria-checked={false} disabled className="route-card unavailable">
-                        <span className="rc-title">Mit Öffis</span>
-                        <span className="rc-meta">{plan.fastest.seconds < 5 * 60 ? 'Weg zu kurz' : !cityInfo.transit ? `Fahrplan für ${cityInfo.name} fehlt noch` : 'keine Verbindung gefunden'}</span>
-                      </button>
-                    );
+              {/* Verkehrsmittel wie in Karten-Apps: erst Ziel, dann vergleichen */}
+              <div className="mode-tabs" role="tablist" aria-label="Verkehrsmittel">
+                {(['transit', 'walk', 'ride', 'scooter'] as const).map((m) => {
+                  const t =
+                    m === 'transit'
+                      ? plan.transit
+                        ? formatDuration(plan.transit.seconds)
+                        : '–'
+                      : m === 'walk'
+                        ? formatDuration(plan.safest.seconds)
+                        : start && end
+                          ? `ca. ${formatDuration((m === 'ride' ? rideMinutes(start.coords, end.coords) : scooterMinutes(start.coords, end.coords)) * 60)}`
+                          : '';
                   return (
                     <button
                       key={m}
                       type="button"
-                      role="radio"
-                      aria-checked={selected === m}
-                      className={`route-card ${selected === m ? 'selected' : ''}`}
-                      onClick={() => setSelected(m)}
+                      role="tab"
+                      aria-selected={mode === m}
+                      className={`mode-tab ${mode === m ? 'active' : ''}`}
+                      onClick={() => {
+                        setMode(m);
+                        if (m === 'transit' && plan.transit) setSelected('transit');
+                        if (m === 'walk' && selected === 'transit') setSelected('safest');
+                      }}
                     >
-                      <span className="rc-title">{m === 'safest' ? 'Sicherste' : m === 'fastest' ? 'Schnellste' : 'Mit Öffis'}</span>
-                      <span className="rc-score" aria-label={`Sicherheitswert ${r.score} von 10`}>
-                        <b>{r.score}</b>
-                        <small>/10</small>
-                      </span>
-                      <span className="rc-meta">
-                        {formatDuration(r.seconds)}
-                        {m === 'transit' ? (
-                          <span className="rc-lines">
-                            {(r.rideInfo ?? []).map((ri, i) => (
-                              <LineBadge key={i} {...ri} />
-                            ))}
-                          </span>
-                        ) : (
-                          ` · ${formatDistance(r.length)}`
-                        )}
-                      </span>
+                      <span className="mt-name">{m === 'transit' ? 'Öffis' : m === 'walk' ? 'Zu Fuß' : m === 'ride' ? 'Taxi' : 'Roller'}</span>
+                      <span className="mt-time">{t}</span>
                     </button>
                   );
                 })}
               </div>
-              {plan.same ? (
-                <p className="fineprint">Hier ist der schnellste Weg auch der sicherste.</p>
-              ) : (
-                extra > 30 && <p className="fineprint">Die sicherste Route dauert etwa {formatDuration(extra)} länger.</p>
+
+              {mode === 'transit' && !plan.transit && (
+                <p className="message">
+                  {plan.fastest.seconds < 5 * 60 ? 'Der Weg ist so kurz, dass Öffis sich nicht lohnen.' : !cityInfo.transit ? `Den Öffi-Fahrplan für ${cityInfo.name} haben wir noch nicht.` : 'Zu dieser Zeit haben wir keine passende Verbindung gefunden.'}{' '}
+                  <button type="button" className="link-btn" onClick={() => (setMode('walk'), setSelected('safest'))}>
+                    Zu Fuß ansehen
+                  </button>
+                </p>
               )}
+
+              {mode === 'transit' && plan.transit && (
+                <div className="route-cards" role="radiogroup" aria-label="Route wählen">
+                  <button type="button" role="radio" aria-checked className="route-card selected wide">
+                    <span className="rc-title">Öffis + zu Fuß</span>
+                    <FeelMeter score={plan.transit.score} />
+                    <span className="rc-meta">
+                      {formatDuration(plan.transit.seconds)}
+                      <span className="rc-lines">
+                        {(plan.transit.rideInfo ?? []).map((ri, i) => (
+                          <LineBadge key={i} {...ri} />
+                        ))}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {mode === 'walk' && (
+                <>
+                  <div className="route-cards" role="radiogroup" aria-label="Fußweg wählen">
+                    {(['safest', 'fastest'] as const).map((m) => {
+                      const r = plan[m];
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected === m}
+                          className={`route-card ${selected === m ? 'selected' : ''}`}
+                          onClick={() => setSelected(m)}
+                        >
+                          <span className="rc-title">{m === 'safest' ? 'Angenehmster Weg' : 'Schnellster Weg'}</span>
+                          <FeelMeter score={r.score} />
+                          <span className="rc-meta">
+                            {formatDuration(r.seconds)} · {formatDistance(r.length)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {plan.same ? (
+                    <p className="fineprint">Hier ist der schnellste Weg auch der angenehmste.</p>
+                  ) : (
+                    extra > 30 && <p className="fineprint">Der angenehmste Weg dauert etwa {formatDuration(extra)} länger.</p>
+                  )}
+                </>
+              )}
+
+              {mode === 'ride' && start && end && <RidePanel city={cityInfo.id} from={start.coords} to={end.coords} toLabel={end.label} toHome={end.kind === 'home' || (!!home && distance(end.coords, home.coords) < 60)} dark={plan.safest.dark} />}
+              {mode === 'scooter' && start && end && <ScooterPanel city={cityInfo.id} from={start.coords} to={end.coords} toLabel={end.label} dark={plan.safest.dark} />}
 
               {chosen && (
                 <>
@@ -610,7 +676,7 @@ export function App() {
 
           {!plan && !message && !busy && (
             <p className="intro">
-              Wähle Start und Ziel. Wir zeigen dir den schnellsten und den sichersten Weg, mit Beleuchtung und geöffneten Orten unterwegs.
+              Wohin willst du? Danach vergleichst du Öffis, zu Fuß, Taxi und Roller, mit einer Einschätzung, wie angenehm sich der Weg anfühlt.
             </p>
           )}
 

@@ -55,6 +55,10 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
             gelöscht, spätestens 60 Minuten nach der letzten Aktualisierung verfällt er von selbst. Kein Ziel, kein Zuhause, keine Route, kein Name.
           </li>
           <li>
+            <b>Uber, Bolt, FreeNow, Lime, Voi</b> – nur wenn du unter „Taxi“ oder „Roller“ auf den Knopf tippst: Die App des Anbieters öffnet sich. An Uber
+            wird dabei dein Ziel übergeben, außer es ist dein Zuhause. An die anderen geht nichts. Ohne Tippen wird nichts übertragen.
+          </li>
+          <li>
             <b>Spracherkennung</b> (nur wenn du im Anruf mit „gut“ / „nicht gut“ antwortest): In Chrome wird die Aufnahme dafür an Google geschickt. Die Knöpfe
             funktionieren ohne.
           </li>
@@ -85,7 +89,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
 
         <h3>Datenquellen</h3>
         <p className="muted">
-          Kartendaten © OpenStreetMap-Mitwirkende (ODbL). Stadt Wien – data.wien.gv.at (CC BY 4.0). Stadt Linz – data.linz.gv.at (CC BY 4.0, Bezirksgrenzen). Öffi-Fahrplan: Wiener Linien Open Data (CC BY 4.0), in der App gespeichert – für Öffi-Vorschläge wird kein Dienst aufgerufen. Straßenfotos © Mapillary-Mitwirkende (CC BY-SA 4.0).
+          Kartendaten © OpenStreetMap-Mitwirkende (ODbL). Stadt Wien – data.wien.gv.at (CC BY 4.0). Stadt Linz – data.linz.gv.at (CC BY 4.0, Bezirksgrenzen). Geoportal Berlin (Datenlizenz Deutschland – Zero 2.0, Ortsteile und Leuchten). VBB-Fahrplan (CC BY 4.0). Öffi-Fahrplan: Wiener Linien Open Data (CC BY 4.0), in der App gespeichert – für Öffi-Vorschläge wird kein Dienst aufgerufen. Straßenfotos © Mapillary-Mitwirkende (CC BY-SA 4.0).
         </p>
         <p className="fineprint">Prototyp, Stand November 2026. Fragen und Hinweise bitte an die Projektverantwortlichen.</p>
       </div>
