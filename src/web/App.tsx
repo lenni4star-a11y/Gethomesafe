@@ -568,7 +568,7 @@ export function App() {
                       : m === 'walk'
                         ? formatDuration(plan.safest.seconds)
                         : start && end
-                          ? `ca. ${formatDuration((m === 'ride' ? rideMinutes(start.coords, end.coords) : scooterMinutes(start.coords, end.coords)) * 60)}`
+                          ? `≈ ${formatDuration((m === 'ride' ? rideMinutes(start.coords, end.coords) : scooterMinutes(start.coords, end.coords)) * 60)}`
                           : '';
                   return (
                     <button

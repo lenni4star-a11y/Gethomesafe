@@ -2889,3 +2889,26 @@ a.btn {
     font-size: 0.78rem;
   }
 }
+
+/* Kleine Bildschirme: Legende unter den Karte/Straße-Umschalter, Reiter-Zeiten umbrechen statt abschneiden */
+@media (max-width: 480px) {
+  .map-legend {
+    top: calc(env(safe-area-inset-top) + 112px);
+  }
+}
+.mode-tab .mt-time {
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+}
+@media (max-width: 400px) {
+  .mode-tab {
+    padding: 6px 2px;
+  }
+  .mode-tab .mt-time {
+    font-size: 0.72rem;
+  }
+  .route-card .rc-title {
+    font-size: 0.92rem;
+  }
+}
