@@ -39,6 +39,12 @@ const MLY_TOKEN = readToken();
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'gebiet.json'), 'utf8'));
 
 // Städte. Bezirksnummern in der App: Wien 1–23, Linz 101–116 (= 100 + Nummer des statistischen Bezirks)
+// Städte ohne eigene Grenz-Daten im Skript: Stadtteile aus OpenStreetMap (Overpass), Stufe 10 = Stadtteile, 9 = Stadtbezirke
+const OSM_CITY = {
+  frankfurt: { name: 'Frankfurt', osmName: 'Frankfurt am Main', level: 10, offset: 500 },
+  koeln: { name: 'Köln', osmName: 'Köln', level: 10, offset: 600 },
+  muenchen: { name: 'München', osmName: 'München', level: 9, offset: 700 },
+};
 const CITIES = [
   { id: 'wien', name: 'Wien', pilot: config.bezirke, durchgang: config.durchgang ?? [], offset: 0, prefix: 'bezirk' },
   ...(config.linz ? [{ id: 'linz', name: 'Linz', pilot: config.linz.bezirke, durchgang: config.linz.durchgang ?? [], offset: 100, prefix: 'linz' }] : []),
@@ -46,14 +52,21 @@ const CITIES = [
   ...(config.berlin ? [{ id: 'berlin', name: 'Berlin', pilot: config.berlin.ortsteile ?? 'alle', durchgang: [], offset: 200, prefix: 'berlin' }] : []),
   // Zürich: ganze Stadt (34 statistische Quartiere)
   ...(config.zuerich ? [{ id: 'zuerich', name: 'Zürich', pilot: config.zuerich.quartiere ?? 'alle', durchgang: [], offset: 400, prefix: 'zuerich' }] : []),
+  // Frankfurt, Köln, München: ganze Stadt, Grenzen der Stadtteile bzw. Stadtbezirke aus OpenStreetMap
+  ...['frankfurt', 'koeln', 'muenchen']
+    .filter((id) => config[id])
+    .map((id) => ({ id, name: OSM_CITY[id].name, pilot: config[id].teile ?? 'alle', durchgang: [], offset: OSM_CITY[id].offset, prefix: id })),
 ];
-const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37 };
+const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37, frankfurt: 50.11, koeln: 50.94, muenchen: 48.14 };
 
 const PBF_URL = {
   wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf',
   linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf',
   berlin: 'https://download.bbbike.org/osm/bbbike/Berlin/Berlin.osm.pbf',
   zuerich: 'https://download.bbbike.org/osm/bbbike/Zuerich/Zuerich.osm.pbf',
+  frankfurt: 'https://download.bbbike.org/osm/bbbike/Frankfurt/Frankfurt.osm.pbf',
+  koeln: 'https://download.bbbike.org/osm/bbbike/Koeln/Koeln.osm.pbf',
+  muenchen: 'https://download.bbbike.org/osm/bbbike/Muenchen/Muenchen.osm.pbf',
 };
 // Stadt Zürich Open Data (Geoportal, CC0): statistische Quartiere und öffentliche Beleuchtung
 const ZH_WFS = (layer, type) => `https://www.ogd.stadt-zuerich.ch/wfs/geoportal/${layer}?service=WFS&version=1.1.0&request=GetFeature&typename=${type}&srsName=EPSG:4326`;
@@ -146,6 +159,91 @@ const WIEN_WVZ = [
 ];
 function wienCrime() {
   return (pt) => (WIEN_WVZ.some((z) => dist(pt, z.at) <= z.r) ? 3 : 0);
+}
+
+// Amtlich festgelegte Waffenverbotszonen (ungefähre Kreise, Stufe 3), Stand November 2026:
+// Frankfurt: Bahnhofsviertel (Stadt Frankfurt / Polizei, nachts, Ausweitung geplant);
+// Köln: Ringe, Zülpicher Straße, Wiener Platz (Verordnung NRW seit 21.12.2021, v. a. Wochenende);
+// München: Alter Botanischer Garten und Karl-Stützel-Platz (seit 15.1.2025, zunächst zwei Jahre).
+const WVZ = {
+  frankfurt: [{ name: 'Bahnhofsviertel', at: [8.6672, 50.1076], r: 330 }],
+  koeln: [
+    { name: 'Ringe (Rudolfplatz)', at: [6.9386, 50.9367], r: 200 },
+    { name: 'Ringe (Friesenplatz)', at: [6.9395, 50.9411], r: 200 },
+    { name: 'Zülpicher Straße', at: [6.9355, 50.9318], r: 230 },
+    { name: 'Wiener Platz', at: [7.007, 50.9622], r: 170 },
+  ],
+  muenchen: [{ name: 'Alter Botanischer Garten', at: [11.5656, 48.1424], r: 220 }],
+};
+function zoneCrime(zones) {
+  return (pt) => (zones.some((z) => dist(pt, z.at) <= z.r) ? 3 : 0);
+}
+
+/** Overpass-Abfrage (mit Ersatz-Server) */
+async function overpass(query, file) {
+  const target = path.join(RAW, file);
+  if (fs.existsSync(target) && !REFRESH) return readJson(target);
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']) {
+    try {
+      log('Overpass', url, file);
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const d = JSON.parse(text);
+      if (!d.elements?.length) throw new Error('leer');
+      fs.writeFileSync(target, text);
+      return d;
+    } catch (e) {
+      log('  Overpass fehlgeschlagen:', e.message);
+    }
+  }
+  throw new Error('Overpass nicht erreichbar: ' + file);
+}
+
+/** Äußere Ringe einer Grenz-Relation aus den Weg-Stücken zusammensetzen */
+function relationRings(rel) {
+  const key = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
+  const parts = rel.members.filter((m) => m.type === 'way' && m.role !== 'inner' && m.geometry?.length > 1).map((m) => m.geometry.map((g) => [g.lon, g.lat]));
+  const rings = [];
+  while (parts.length) {
+    let ring = parts.shift();
+    let grown = true;
+    while (key(ring[0]) !== key(ring[ring.length - 1]) && grown) {
+      grown = false;
+      const end = key(ring[ring.length - 1]);
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (key(p[0]) === end) ring = ring.concat(p.slice(1));
+        else if (key(p[p.length - 1]) === end) ring = ring.concat(p.slice(0, -1).reverse());
+        else continue;
+        parts.splice(i, 1);
+        grown = true;
+        break;
+      }
+    }
+    if (ring.length > 3) rings.push(ring);
+  }
+  return rings.sort((a, b) => b.length - a.length);
+}
+
+/** Stadtteile/Stadtbezirke einer Stadt aus OpenStreetMap; nur Teile, deren Mitte in der Stadt liegt */
+async function osmDistricts(id) {
+  const c = OSM_CITY[id];
+  const cityQ = `[out:json][timeout:180];rel["boundary"="administrative"]["admin_level"="6"]["name"="${c.osmName}"];out geom;`;
+  const cityRel = (await overpass(cityQ, `${id}-stadt.json`)).elements[0];
+  const cityRing = relationRings(cityRel)[0];
+  let out = [];
+  for (const level of [c.level, c.level === 10 ? 9 : 10]) {
+    const q = `[out:json][timeout:300];area["boundary"="administrative"]["admin_level"="6"]["name"="${c.osmName}"]->.c;rel(area.c)["boundary"="administrative"]["admin_level"="${level}"];out geom;`;
+    const d = await overpass(q, `${id}-teile-${level}.json`);
+    out = d.elements
+      .filter((r) => r.type === 'relation' && r.tags?.name)
+      .map((r) => ({ name: r.tags.name, ring: relationRings(r)[0] }))
+      .filter((t) => t.ring && pointInRing(t.ring.reduce((a, p) => [a[0] + p[0] / t.ring.length, a[1] + p[1] / t.ring.length], [0, 0]), cityRing));
+    log(`  ${c.name}: ${out.length} Teile auf Ebene ${level}`);
+    if (out.length >= 5) break;
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'de')).map((t, i) => ({ nr: i + 1, name: t.name, poly: [t.ring] }));
 }
 
 /** Fläche eines Rings in km² (lokale Projektion) */
@@ -478,6 +576,7 @@ async function buildCity(city, acc) {
     }));
   } else if (city.id === 'linz') raw = await linzDistricts();
   else if (city.id === 'berlin') raw = await berlinDistricts();
+  else if (OSM_CITY[city.id]) raw = await osmDistricts(city.id);
   else raw = await zuerichDistricts();
   const PILOT = city.pilot === 'alle' ? raw.map((b) => b.nr) : city.pilot.map(Number);
   const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
@@ -518,7 +617,7 @@ async function buildCity(city, acc) {
     }
   }
   log('Leuchten der Stadt im Gebiet:', lampCount);
-  const crimeAt = city.id === 'berlin' ? await berlinCrime() : city.id === 'zuerich' ? await zuerichCrime() : city.id === 'wien' ? wienCrime() : null;
+  const crimeAt = city.id === 'berlin' ? await berlinCrime() : city.id === 'zuerich' ? await zuerichCrime() : city.id === 'wien' ? wienCrime() : WVZ[city.id] ? zoneCrime(WVZ[city.id]) : null;
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);
@@ -954,7 +1053,9 @@ async function buildCity(city, acc) {
         ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung, Bezirksregionen; Polizei Berlin: Kriminalitätsatlas (CC BY-SA), kriminalitätsbelastete Orte'
         : city.id === 'zuerich'
           ? 'Datenquelle: Stadt Zürich Open Data (CC0): statistische Quartiere, öffentliche Beleuchtung'
-        : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
+        : OSM_CITY[city.id]
+          ? `Datenquelle ${OSM_CITY[city.id].name}: Stadtteile aus OpenStreetMap (ODbL); Waffenverbotszonen laut Stadt bzw. Polizei`
+          : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
   if (mlyCount) acc.mapillary = true;
   index.cities.push({

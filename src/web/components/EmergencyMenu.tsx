@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { buildMessage, smsLink, telLink, whatsappLink, type Contact, type MessageKind } from '../../core/contacts';
-import { emergencyFor, helplinesFor, silentCallFor } from '../../core/helplines';
+import { emergencyFor, helplinesFor, silentCallFor, COUNTRY_OF } from '../../core/helplines';
 import { currentCity } from '../region';
 import { SvgIcon } from './Icon';
 import type { LngLat } from '../../core/types';
@@ -128,8 +128,10 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
         </ul>
         <p className="fineprint">{city === 'linz'
             ? 'Nummern für Oberösterreich geprüft im November 2026, die übrigen im Oktober 2026, jeweils auf offiziellen Seiten.'
-            : city === 'berlin'
-              ? 'Nummern für Deutschland und Berlin geprüft im November 2026 auf offiziellen Seiten.'
+            : COUNTRY_OF[city] === 'de'
+              ? 'Nummern für Deutschland geprüft im November 2026 auf offiziellen Seiten.'
+              : COUNTRY_OF[city] === 'ch'
+                ? 'Nummern für die Schweiz geprüft im November 2026 auf offiziellen Seiten.'
               : 'Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.'}</p>
       </section>
 
