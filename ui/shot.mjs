@@ -11,16 +11,18 @@ const skip = page.getByText('Überspringen');
 if (await skip.count()) await skip.first().click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${out}/1-start.png` });
-await page.selectOption('select.city-select', 'berlin', { timeout: 10000 }).catch((e) => console.log('city', e.message));
+await page.locator('.collapsed-main').first().click().catch(() => {});
+await page.waitForTimeout(600);
+await page.selectOption('select.city-select.inline', 'berlin', { timeout: 10000 }).catch((e) => console.log('city', e.message));
 await page.waitForTimeout(2500);
 await page.screenshot({ path: `${out}/2-berlin.png` });
-await page.getByText('Wohin?').click().catch(() => {});
+
 await page.waitForTimeout(500);
 const inputs = page.locator('input[type=search]');
 async function pick(i, q) {
   await inputs.nth(i).fill(q);
   await page.waitForTimeout(2500);
-  const opt = page.locator('.suggestions [role=option]').first();
+  const opt = page.locator('.suggestions [role=option] button').first();
   await opt.click().catch((e) => console.log('pick', q, e.message));
   await page.waitForTimeout(800);
 }
@@ -28,6 +30,7 @@ await pick(0, 'Warschauer Str');
 await pick(1, 'Hermannplatz');
 await page.waitForTimeout(12000);
 await page.screenshot({ path: `${out}/3-route.png` });
+console.log('tabs', await page.locator('.mode-tab').count(), 'message', await page.locator('.message').allTextContents());
 await page.getByText('Weg ansehen').count();
 const sheet = page.locator('.sheet');
 await page.locator('.collapsed-main').first().click().catch(() => {});
