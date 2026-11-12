@@ -867,6 +867,17 @@ async function buildCity(city, acc) {
     log(`  ${fname}: ${file.edges.length} Kanten, ${poiList.length} Orte, ${(json.length / 1024).toFixed(0)} KB`);
   }
   acc.stops.push(...stops);
+  // Lokale, Bars, Clubs, Kultur und Hotels mit Namen: für die Suche im Feld „Wohin?“ (auch ohne Photon)
+  const seenPlace = new Set();
+  acc.places[city.id] = pois
+    .filter((p) => p.t.name && ['bar', 'food', 'culture', 'hotel'].includes(p.cat))
+    .filter((p) => {
+      const k = `${p.t.name}|${Math.round(p.lon * 2000)}|${Math.round(p.lat * 2000)}`;
+      if (seenPlace.has(k)) return false;
+      seenPlace.add(k);
+      return true;
+    })
+    .map((p) => [p.t.name, +p.lon.toFixed(5), +p.lat.toFixed(5), p.t.amenity ?? p.t.tourism ?? p.cat, [p.t['addr:street'], p.t['addr:housenumber']].filter(Boolean).join(' ')]);
   if (isWien) acc.extras = { generated: index.generated, taxi, wc, works: worksRaw };
 }
 
@@ -876,6 +887,7 @@ async function main() {
   const acc = {
     index: { generated: new Date().toISOString(), attribution: ['© OpenStreetMap-Mitwirkende (ODbL)'], cities: [], bezirke: [] },
     stops: [],
+    places: {},
     extras: null,
     mapillary: false,
   };
@@ -883,6 +895,11 @@ async function main() {
   if (acc.mapillary) acc.index.attribution.push('Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)');
   fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(acc.index));
   fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(acc.stops));
+  for (const [city, list] of Object.entries(acc.places)) {
+    const json = JSON.stringify(list);
+    fs.writeFileSync(path.join(OUT, `orte-${city}.json`), json);
+    log(`  orte-${city}.json: ${list.length} Lokale/Clubs/Orte, ${(json.length / 1024).toFixed(0)} KB`);
+  }
   // Zusatzdaten der Stadt Wien (klein, für alle Bezirke gemeinsam)
   const extras = acc.extras ?? { generated: acc.index.generated, taxi: [], wc: [], works: [] };
   fs.writeFileSync(path.join(OUT, 'extras.json'), JSON.stringify(extras));
