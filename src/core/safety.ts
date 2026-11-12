@@ -13,6 +13,11 @@ export const WEIGHTS = {
   avoid: 3,
   /** Aufschlag für Wege durch Parks / direkt neben Parks (nachts, tagsüber), wird mit der Einstellung multipliziert */
   park: { inside: { night: 0.45, day: 0.15 }, near: { night: 0.2, day: 0 } },
+  /**
+   * Amtliche Kriminalitätsdaten (Berlin) als kleiner Aufschlag aufs Risiko: höchstens etwa ein Punkt auf der Skala 1–10
+   * (Wert = 10 − 9 × Risiko, also 0,11 Risiko ≈ 1 Punkt). Tagsüber halb so stark. Abschaltbar in den Einstellungen.
+   */
+  crime: { 1: 0.06, 2: 0.11, 3: 0.14 } as Record<number, number>,
 };
 
 /** Einstellung „Parks meiden“ → Faktor */
@@ -79,12 +84,16 @@ export interface SafetyContext {
   rating?: (e: Edge) => EdgeRating | null;
   /** zur gewählten Zeit aktive Baustellen (IDs) */
   activeWorks?: Set<string>;
+  /** amtliche Kriminalitätsdaten berücksichtigen (Standard: ja) */
+  crimeData?: boolean;
 }
 
 export interface ContextOptions {
   parkAvoidance?: ParkAvoidance;
   activeWorks?: Set<string>;
   rating?: (e: Edge) => EdgeRating | null;
+  /** amtliche Kriminalitätsdaten berücksichtigen (Standard: ja) */
+  crimeData?: boolean;
 }
 
 export function createContext(date: Date, dark: boolean, opts: ContextOptions = {}): SafetyContext {
@@ -95,6 +104,7 @@ export function createContext(date: Date, dark: boolean, opts: ContextOptions = 
     parkFactor: PARK_FACTORS[opts.parkAvoidance ?? 2],
     rating: opts.rating,
     activeWorks: opts.activeWorks,
+    crimeData: opts.crimeData,
     open: (poi) => {
       let s = memo.get(poi.id);
       if (!s) memo.set(poi.id, (s = openState(poi, date)));
@@ -153,6 +163,7 @@ export function edgeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): E
   if (ctx.activeWorks && e.works.some((id) => ctx.activeWorks!.has(id))) way = Math.min(1, way + 0.15);
   const life = lifeRisk(e, pois, ctx);
   let risk = w.light * light + w.way * way + w.life * life;
+  if (e.crime && ctx.crimeData !== false) risk += (WEIGHTS.crime[e.crime] ?? 0) * (ctx.dark ? 1 : 0.5);
 
   // Bewertungen verschieben das Ergebnis, je mehr es gibt, desto stärker
   const rating = ctx.rating?.(e);

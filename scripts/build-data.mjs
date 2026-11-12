@@ -324,6 +324,58 @@ async function berlinDistricts() {
     });
 }
 
+// Amtliche Einschätzungen der Polizei Berlin (nur als kleiner Abzug, Quelle wird in der App genannt):
+// 1. Kriminalitätsatlas: Straßenraub + gefährliche Körperverletzung je Bezirksregion, als Dichte (Fälle pro km²),
+//    nicht pro Einwohner*in (sonst wirken Ausgehviertel und Bahnhöfe mit wenigen Bewohner*innen extrem).
+//    Oberste 10 % → Stufe 2, nächste 15 % → Stufe 1.
+// 2. Kriminalitätsbelastete Orte (kbO) laut Polizei Berlin, gültig ab 1.7.2026, als ungefähre Kreise → Stufe 3.
+//    Rigaer Straße ist bewusst nicht dabei: Die Einstufung beruht vor allem auf politisch motivierten Taten
+//    bei Demonstrationen, nicht auf Gefahren für Menschen auf dem Heimweg.
+const BERLIN_BZR = 'https://gdi.berlin.de/services/wfs/lor_2021?service=WFS&version=2.0.0&request=GetFeature&typeNames=lor_2021:b_lor_bzr_2021&outputFormat=application/json&srsName=EPSG:4326';
+const BERLIN_KBO = [
+  { name: 'Alexanderplatz', at: [13.4132, 52.5219], r: 350 },
+  { name: 'Görlitzer Park/Wrangelkiez', at: [13.4372, 52.4967], r: 480 },
+  { name: 'Hermannplatz/Donaukiez', at: [13.4245, 52.4869], r: 330 },
+  { name: 'Hermannstraße/Bahnhof Neukölln', at: [13.4295, 52.4775], r: 330 },
+  { name: 'Hermannstraße/Bahnhof Neukölln', at: [13.4352, 52.4685], r: 330 },
+  { name: 'Kottbusser Tor', at: [13.4180, 52.4991], r: 250 },
+  { name: 'Warschauer Brücke', at: [13.4491, 52.5058], r: 300 },
+];
+
+async function berlinCrime() {
+  const file = path.join(RAW, 'berlin-krimi.json');
+  if (!fs.existsSync(file)) {
+    log('  Kein Kriminalitätsatlas (scripts/krimi-berlin.py nicht gelaufen) – ohne Abzug weiter.');
+    return null;
+  }
+  const atlas = readJson(file);
+  const bzr = readJson(await download(BERLIN_BZR, 'berlin-bzr.json'));
+  const areaKm2 = (ring) => {
+    let a = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += (ring[j][0] * MX - ring[i][0] * MX) * (ring[j][1] * MY + ring[i][1] * MY);
+    return Math.abs(a / 2) / 1e6;
+  };
+  const regions = [];
+  for (const f of bzr.features) {
+    const code = String(f.properties?.bzr_id ?? f.properties?.BZR_ID ?? f.id ?? '').replace(/^.*\./, '');
+    const a = atlas.regionen[code];
+    if (!a) continue;
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const km2 = polys.reduce((s, p) => s + areaKm2(p[0]), 0) || 1;
+    regions.push({ code, name: a.name, polys, density: (a.raub + a.kv) / km2 });
+  }
+  const sorted = [...regions].sort((x, y) => y.density - x.density);
+  sorted.forEach((r, i) => (r.level = i < sorted.length * 0.1 ? 2 : i < sorted.length * 0.25 ? 1 : 0));
+  log(`  Kriminalitätsatlas ${atlas.jahr}: ${regions.length} Bezirksregionen, am dichtesten: ${sorted.slice(0, 6).map((r) => r.name).join(', ')}`);
+  const grid = new Grid(500);
+  for (const r of regions) if (r.level) for (const p of r.polys) grid.addBox(bboxOf(p[0]), { r, p });
+  return (pt) => {
+    for (const k of BERLIN_KBO) if (dist(pt, k.at) <= k.r) return 3;
+    const hit = grid.at(pt[0], pt[1]).find((h) => pointInPolygon(pt, h.p));
+    return hit ? hit.r.level : 0;
+  };
+}
+
 /** Alle öffentlichen Leuchten in Berlin (ca. 210.000), seitenweise abgefragt; ohne Schaltkästen und außer Betrieb */
 async function berlinLamps() {
   const file = path.join(RAW, 'berlin-leuchten.json');
@@ -404,6 +456,7 @@ async function buildCity(city, acc) {
     }
   }
   log('Leuchten der Stadt im Gebiet:', lampCount);
+  const crimeAt = city.id === 'berlin' ? await berlinCrime() : null;
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);
@@ -820,7 +873,10 @@ async function buildCity(city, acc) {
       // Schema siehe src/core/types.ts (RawEdge)
       // Weg in einem Park mit Öffnungszeiten (z. B. nachts zugesperrt): Zeiten mitgeben, die App sperrt den Weg dann
       const ph = KIND[r.kind] >= KIND.pedestrian ? hoursAt(mid) : null;
-      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage, ...(ph ? [ph] : [])]);
+      // amtliche Kriminalitätseinschätzung (nur Berlin): 0 keine, 1/2 Kriminalitätsatlas, 3 kriminalitätsbelasteter Ort
+      const crime = crimeAt ? crimeAt(mid) : 0;
+      const tail = crime ? [ph ?? null, crime] : ph ? [ph] : [];
+      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage, ...tail]);
       edgeCount++;
     }
   }
@@ -833,7 +889,7 @@ async function buildCity(city, acc) {
     isWien
       ? 'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen'
       : city.id === 'berlin'
-        ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung'
+        ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung, Bezirksregionen; Polizei Berlin: Kriminalitätsatlas (CC BY-SA), kriminalitätsbelastete Orte'
         : city.id === 'zuerich'
           ? 'Datenquelle: Stadt Zürich Open Data (CC0): statistische Quartiere, öffentliche Beleuchtung'
         : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',

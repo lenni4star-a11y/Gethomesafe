@@ -21,6 +21,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Kriminalitätsatlas Berlin vorbereiten
+        run: (pip install -q openpyxl || pip install -q --break-system-packages openpyxl) && python3 scripts/krimi-berlin.py
       - run: npm run data
         env:
           NODE_OPTIONS: --max-old-space-size=12000

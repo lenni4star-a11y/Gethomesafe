@@ -52,7 +52,7 @@ export class Graph {
     for (const p of file.pois) this.pois.set(p.id, p);
 
     for (const raw of file.edges) {
-      const [la, lb, length, kind, nameIdx, osmLit, cov, flags, geom, pois, mly = 0, works = [], frontage = 0, parkHours] = raw;
+      const [la, lb, length, kind, nameIdx, osmLit, cov, flags, geom, pois, mly = 0, works = [], frontage = 0, parkHours, crime = 0] = raw;
       const a = local[la];
       const b = local[lb];
       const coords: LngLat[] = [this.coords[a]];
@@ -70,7 +70,7 @@ export class Graph {
       else if (mlyCoverage >= MLY_COVERAGE_LIT) [lit, litSource] = ['yes', 'mapillary'];
 
       const id = this.edges.length;
-      this.edges.push({ id, a, b, length, kind, name: file.names[nameIdx] ?? '', lit, lampCoverage, litSource, mlyCoverage, works, frontage, ...(parkHours ? { parkHours } : {}), flags, coords, pois });
+      this.edges.push({ id, a, b, length, kind, name: file.names[nameIdx] ?? '', lit, lampCoverage, litSource, mlyCoverage, works, frontage, ...(parkHours ? { parkHours } : {}), ...(crime ? { crime } : {}), flags, coords, pois });
       this.adjacency[a].push(id);
       this.adjacency[b].push(id);
     }
