@@ -15,3 +15,10 @@ jobs:
             echo "$n => HTTP $code $user"
             sleep 3
           done
+      - name: Kontakte und Datensatz Zürich schaut hin
+        run: |
+          for u in https://www.clubcommission.de/impressum/ https://www.clubcommission.de/kontakt/ https://prototypefund.opendata.ch/kontakt/ https://prototypefund.opendata.ch/ https://www.stadt-zuerich.ch/de/lebenslagen/unterstuetzung-und-beratung/diversitaet-und-inklusion/gleichstellung.html; do
+            echo "== $u"; curl -sL "$u" | grep -oiE 'mailto:[^"?]+|[a-z0-9._-]+@[a-z0-9.-]+\.(de|ch|org|berlin)' | sort -u | head -8
+          done
+          echo "== Zürich schaut hin"
+          curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=sid_zuerich_schaut_hin_od6001" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; print(d.get("notes","")[:1500]); [print(r.get("format"), r.get("url")) for r in d["resources"]]'
