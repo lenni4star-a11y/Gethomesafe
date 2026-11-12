@@ -23,7 +23,7 @@ async function pick(i, q) {
   await inputs.nth(i).fill(q);
   await page.waitForTimeout(2500);
   const opt = page.locator('.suggestions [role=option] button').first();
-  await opt.click().catch((e) => console.log('pick', q, e.message));
+  await opt.evaluate((b) => b.click()).catch((e) => console.log('pick', q, e.message));
   await page.waitForTimeout(800);
 }
 await pick(0, 'Warschauer Str');
