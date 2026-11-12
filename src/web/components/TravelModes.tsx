@@ -87,11 +87,6 @@ export function RidePanel({ city, from, to, toLabel, dark, toHome = false }: Pan
         <b>ca. {formatDuration(min * 60)}</b> Fahrt · {formatDistance(roughMeters(from, to, 1.35))} <span className="muted">(grob geschätzt, ohne Wartezeit)</span>
       </p>
       <div className="ride-buttons">
-        {taxis.map((t) => (
-          <a key={t.dial} className="btn" href={`tel:${t.dial}`}>
-            Taxi rufen: {t.name} <small>{t.number}</small>
-          </a>
-        ))}
         <a className="btn" href={uber.toString()} target="_blank" rel="noreferrer">
           Uber öffnen <small>{toHome ? 'Zuhause in der App eingeben' : 'Ziel wird übergeben'}</small>
         </a>
@@ -101,6 +96,11 @@ export function RidePanel({ city, from, to, toLabel, dark, toHome = false }: Pan
         <a className="btn" href="https://www.free-now.com/" target="_blank" rel="noreferrer">
           FreeNow öffnen <small>Taxi per App</small>
         </a>
+        {taxis.map((t) => (
+          <a key={t.dial} className="btn" href={`tel:${t.dial}`}>
+            Taxi rufen: {t.name} <small>{t.number}</small>
+          </a>
+        ))}
       </div>
       <ul className="tips">
         <li>Kennzeichen und Name mit der App vergleichen, bevor du einsteigst.</li>
