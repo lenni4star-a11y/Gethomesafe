@@ -29,7 +29,9 @@ async function pick(i, q) {
 }
 await page.getByLabel('Meinen Standort verwenden').click().catch((e) => console.log('locate', e.message));
 await page.waitForTimeout(1500);
-await pick(1, 'Hermannplatz');
+await page.getByLabel('Nach auf der Karte wählen').click().catch((e) => console.log('pickmap', e.message));
+await page.waitForTimeout(1500);
+await page.mouse.click(150, 190);
 await page.waitForTimeout(20000);
 console.log('inputs', await inputs.nth(0).inputValue(), '|', await inputs.nth(1).inputValue());
 await page.screenshot({ path: `${out}/3-route.png` });
