@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { buildMessage, smsLink, telLink, whatsappLink, type Contact, type MessageKind } from '../../core/contacts';
-import { EMERGENCY, helplinesFor, SILENT_CALL } from '../../core/helplines';
+import { emergencyFor, helplinesFor, silentCallFor } from '../../core/helplines';
+import { currentCity } from '../region';
 import type { LngLat } from '../../core/types';
 import { ContactsEditor } from './ContactsEditor';
 import { Modal } from './Modal';
@@ -59,7 +60,7 @@ export function ContactActions({ contact, kind, lastPosition, liveLink }: { cont
 export function EmergencyButtons() {
   return (
     <div className="emergency-buttons">
-      {EMERGENCY.map((e) => (
+      {emergencyFor(currentCity()).map((e) => (
         <a key={e.number} className="emergency-btn" href={`tel:${e.number}`}>
           <b>{e.number}</b>
           <span>{e.label}</span>
@@ -70,22 +71,24 @@ export function EmergencyButtons() {
 }
 
 export function SilentCallHint() {
+  const sc = silentCallFor(currentCity());
+  if (!sc) return null;
   return (
     <div className="silent-call">
       <p>
-        <b>Stiller Notruf:</b> {SILENT_CALL.text}
+        <b>Stiller Notruf:</b> {sc.text}
       </p>
       <p>
-        <a href={SILENT_CALL.ios} target="_blank" rel="noreferrer">
-          DEC112 für iPhone
+        <a href={sc.ios} target="_blank" rel="noreferrer">
+          {sc.app} für iPhone
         </a>{' '}
         ·{' '}
-        <a href={SILENT_CALL.android} target="_blank" rel="noreferrer">
-          DEC112 für Android
+        <a href={sc.android} target="_blank" rel="noreferrer">
+          {sc.app} für Android
         </a>{' '}
         ·{' '}
-        <a href={SILENT_CALL.info} target="_blank" rel="noreferrer">
-          Info von oesterreich.gv.at
+        <a href={sc.info} target="_blank" rel="noreferrer">
+          {sc.infoLabel}
         </a>
       </p>
     </div>
@@ -122,7 +125,11 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
             </li>
           ))}
         </ul>
-        <p className="fineprint">{city === 'linz' ? 'Nummern für Oberösterreich geprüft im November 2026, die übrigen im Oktober 2026, jeweils auf offiziellen Seiten.' : 'Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.'}</p>
+        <p className="fineprint">{city === 'linz'
+            ? 'Nummern für Oberösterreich geprüft im November 2026, die übrigen im Oktober 2026, jeweils auf offiziellen Seiten.'
+            : city === 'berlin'
+              ? 'Nummern für Deutschland und Berlin geprüft im November 2026 auf offiziellen Seiten.'
+              : 'Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.'}</p>
       </section>
 
       <section className="sos-section" aria-labelledby="sos-kontakte">

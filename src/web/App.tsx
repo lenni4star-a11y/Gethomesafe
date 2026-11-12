@@ -42,6 +42,8 @@ import { useLiveShare } from './liveShare';
 import { unlockAudio } from './signals';
 import { Icon, LineBadge, Wordmark } from './components/Icon';
 import { RouteOverview } from './components/RouteOverview';
+import { emergencyText } from '../core/helplines';
+import { setCurrentCity } from './region';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
 type SheetState = 'collapsed' | 'half' | 'full';
@@ -99,6 +101,7 @@ export function App() {
 
   const cities = useMemo(() => planner?.index.cities ?? [{ id: 'wien', name: 'Wien', transit: true, lamps: true, bbox: [16.28, 48.17, 16.43, 48.24] as [number, number, number, number] }], [planner]);
   const cityInfo = cities.find((c) => c.id === city) ?? cities[0];
+  setCurrentCity(cityInfo.id);
 
   const bbox = useMemo<[number, number, number, number]>(() => {
     if (!planner) return [16.28, 48.17, 16.43, 48.24];
@@ -118,7 +121,8 @@ export function App() {
   };
 
   const time = customTime ?? new Date();
-  const dark = isDark(time);
+  // hell/dunkel für die Mitte der gewählten Stadt (Berlin und Wien unterscheiden sich um bis zu eine halbe Stunde)
+  const dark = isDark(time, (cityInfo.bbox[1] + cityInfo.bbox[3]) / 2, (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2);
 
   useEffect(() => {
     map.current?.setPoints(start?.coords ?? null, end?.coords ?? null);
@@ -615,7 +619,7 @@ export function App() {
           </button>
 
 
-              <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: 133 (Polizei), 144 (Rettung) oder 112.</p>
+              <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: {emergencyText(cityInfo.id)}.</p>
             </>
           )}
         </section>

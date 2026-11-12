@@ -6,6 +6,7 @@ import { along, bearing, lineLength, turnAngle } from '../../core/geo';
 import { closesAt } from '../../core/openingHours';
 import type { PlanResult } from '../../core/planner';
 import type { Selection } from '../App';
+import { textOn } from './Icon';
 import { cityOf, type DataIndex, type LngLat, type Poi } from '../../core/types';
 import { placeKindLabel, placeName } from '../places';
 import { mapStyleUrl } from '../mapStyle';
@@ -243,6 +244,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
           el.className = `line-badge${info?.mode === 1 ? ' ubahn' : ''}`;
           el.textContent = info?.line ?? '';
           el.style.background = info?.color ?? '#1f4e9c';
+          el.style.color = textOn(info?.color ?? '#1f4e9c');
           el.setAttribute('aria-hidden', 'true');
           return new maplibregl.Marker({ element: el }).setLngLat(path[Math.floor(path.length / 2)]).addTo(map);
         });

@@ -4,6 +4,8 @@ import type { Place } from '../geocode';
 import { ContactsEditor } from './ContactsEditor';
 import { PlaceInput } from './PlaceInput';
 import { SoundCheck } from './SoundCheck';
+import { emergencyText } from '../../core/helplines';
+import { currentCity } from '../region';
 
 interface Props {
   home: Place | null;
@@ -64,7 +66,7 @@ export function Onboarding({ home, onHomeChange, contacts, onContactsChange, bbo
             <h2>Was die App nicht kann</h2>
             <ul className="ob-list warn">
               <li>
-                <b>Kein Ersatz für den Notruf.</b> Im Notfall direkt 133 (Polizei), 144 (Rettung) oder 112 anrufen. Die App ruft nie selbst die Polizei.
+                <b>Kein Ersatz für den Notruf.</b> Im Notfall direkt {emergencyText(currentCity())} anrufen. Die App ruft nie selbst die Polizei.
               </li>
               <li>
                 <b>Bildschirm anlassen:</b> Bei gesperrtem Bildschirm oder in einer anderen App pausiert der Browser die Begleitung.

@@ -13,7 +13,7 @@ permissions:
 jobs:
   data:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run data
         env:
-          NODE_OPTIONS: --max-old-space-size=6000
+          NODE_OPTIONS: --max-old-space-size=12000
           MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
       - run: npm test
       - name: Neue Daten hochladen

@@ -10,7 +10,8 @@ import { formatClock, lineColor, MODE_LABEL, TransitNetwork, type RideLeg, type 
 import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
-import type { DataIndex, DistrictFile, DistrictInfo, Extras, LngLat } from './types';
+import { setHolidayRegion } from './openingHours';
+import { cityOf, type DataIndex, type DistrictFile, type DistrictInfo, type Extras, type LngLat } from './types';
 
 export type JsonLoader = <T>(path: string) => Promise<T>;
 
@@ -27,14 +28,22 @@ export class Planner {
   readonly graph = new Graph();
   private loading = new Map<number, Promise<void>>();
   private extrasPromise: Promise<Extras | null> | null = null;
-  private transitPromise: Promise<TransitNetwork | null> | null = null;
+  private transitPromises = new Map<string, Promise<TransitNetwork | null>>();
 
-  /** Öffi-Fahrplan (transit.json); fehlt die Datei, gibt es keine Öffi-Vorschläge */
-  transitNetwork(): Promise<TransitNetwork | null> {
-    this.transitPromise ??= this.load<TransitData>('transit.json')
-      .then((d) => new TransitNetwork(d))
-      .catch(() => null);
-    return this.transitPromise;
+  /** Öffi-Fahrplan der Stadt (Wien: transit.json, sonst transit-<stadt>.json); fehlt die Datei, gibt es keine Öffi-Vorschläge */
+  transitNetwork(city = 'wien'): Promise<TransitNetwork | null> {
+    let p = this.transitPromises.get(city);
+    if (!p) {
+      const info = this.index.cities?.find((c) => c.id === city);
+      p =
+        city !== 'wien' && !info?.transit
+          ? Promise.resolve(null)
+          : this.load<TransitData>(city === 'wien' ? 'transit.json' : `transit-${city}.json`)
+              .then((d) => new TransitNetwork(d))
+              .catch(() => null);
+      this.transitPromises.set(city, p);
+    }
+    return p;
   }
 
   /** Zusatzdaten der Stadt Wien (Taxistände, WCs, Baustellen); fehlt die Datei, geht es ohne */
@@ -76,6 +85,7 @@ export class Planner {
 
   async plan(from: LngLat, to: LngLat, date: Date, opts: ContextOptions & { ratings?: Rating[]; transit?: boolean } = {}): Promise<PlanResult | null> {
     await this.ensureDistricts([from, to]);
+    setHolidayRegion(cityOf(this.districtAt(from) ?? {}));
     // Bewertungen passend zu Wochentag und Uhrzeit
     const rating = opts.ratings?.length ? ratingLookup(this.graph, opts.ratings, timeFilterFor(date)) : opts.rating;
     const extras = await this.extras();
@@ -95,7 +105,7 @@ export class Planner {
 
   /** Kombinierte Route zu Fuß → Öffi → zu Fuß. Die Fußwege werden als sicherste Fußwege berechnet. */
   private async planTransit(from: LngLat, to: LngLat, date: Date, ctx: ReturnType<typeof createContext>, extras: Extras | null, walkSeconds: number): Promise<RouteSummary | null> {
-    const net = await this.transitNetwork();
+    const net = await this.transitNetwork(cityOf(this.districtAt(from) ?? {}));
     if (!net) return null;
     const [opt] = net.search(from, to, date, ctx.dark, 1);
     if (!opt) return null;
@@ -148,7 +158,7 @@ export class Planner {
       mode: 'transit',
       transit: opt,
       rides: rides.map((r) => r.path),
-      rideInfo: rides.map((r) => ({ line: r.line, mode: r.mode, color: lineColor(r.line, r.mode) })),
+      rideInfo: rides.map((r) => ({ line: r.line, mode: r.mode, color: r.color ?? lineColor(r.line, r.mode) })),
       coords: [...(a?.coords ?? [from]), ...rides.flatMap((r) => r.path), ...(b?.coords ?? [to])],
       length: walkLen,
       seconds: Math.max(opt.totalMin * 60, (a?.seconds ?? 0) + (b?.seconds ?? 0)),
