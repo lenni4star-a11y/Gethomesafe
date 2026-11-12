@@ -1404,6 +1404,25 @@ a.btn {
   }
 }
 
+/* Stadtwahl: oben nur auf breiten Bildschirmen, sonst im Menü neben „hell/dunkel“ */
+.city-select.inline {
+  display: none;
+}
+@media (max-width: 520px) {
+  .city-select.top {
+    display: none;
+  }
+  .city-select.inline {
+    display: inline-block;
+  }
+}
+
+.svg-icon {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
 /* Stadt-Auswahl in der Kopfleiste (Wien / Linz) */
 .city-select {
   appearance: none;

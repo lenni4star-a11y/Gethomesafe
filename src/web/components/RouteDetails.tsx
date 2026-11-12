@@ -3,6 +3,8 @@ import { closesAt } from '../../core/openingHours';
 import type { LngLat, Poi } from '../../core/types';
 import { formatDistance, formatDuration } from '../format';
 import { PLACE_META, PLACE_ORDER, placeKindLabel, placeName } from '../places';
+import { SvgIcon } from './Icon';
+import { ICON_FOR } from '../placeIcons';
 import { CLASS_COLORS } from './MapView';
 
 const HINT_ICON: Record<Hint['kind'], string> = {
@@ -164,7 +166,7 @@ function OpenPlaces({ places, date, onFocus }: { places: Poi[]; date: Date; onFo
       {groups.map((g) => (
         <details key={g.cat} className="place-group" open={g.cat === 'police' || g.list.length <= 4}>
           <summary>
-            <span aria-hidden>{PLACE_META[g.cat].icon}</span> {PLACE_META[g.cat].label} ({g.list.length})
+            <SvgIcon name={ICON_FOR[g.cat] ?? 'star'} /> {PLACE_META[g.cat].label} ({g.list.length})
           </summary>
           <ul className="places">
             {g.list.map((p) => {

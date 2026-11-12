@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from './Icon';
 import type { RouteSummary } from '../../core/analysis';
 import { along, bearing, lineLength } from '../../core/geo';
 import type { SafetyClass } from '../../core/safety';
@@ -168,7 +169,7 @@ export function StreetPreview({ route, token, onClose, onMapFlight, onRate }: Pr
 
       <div className="sp-bottom">
         <button type="button" className="link-btn" onClick={() => (setPlaying(false), onRate(position, photo))}>
-          ⭐ Diese Stelle bewerten
+          <Icon name="star" size={16} /> Diese Stelle bewerten
         </button>
         <span className="fineprint">
           Fotos für {Math.round(walk.coverage * 100)} % der Strecke{walk.nightShare > 0 ? `, ${Math.round(walk.nightShare * 100)} % davon nachts` : ''}.{' '}

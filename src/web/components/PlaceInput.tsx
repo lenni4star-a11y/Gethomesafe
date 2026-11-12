@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { searchAddress, searchStops, type Place } from '../geocode';
+import { SvgIcon } from './Icon';
 
 interface Props {
   label: string;
@@ -103,7 +104,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
                 }}
               >
                 <span className="sugg-label">
-                  {r.kind === 'stop' ? '🚇 ' : ''}
+                  {r.kind === 'stop' ? <SvgIcon name="tram" /> : null}
                   {r.label}
                 </span>
                 {r.detail && <span className="sugg-detail">{r.detail}</span>}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from './Icon';
 import type { ColorSegment } from '../../core/analysis';
 import { bearing, distance, turnAngle } from '../../core/geo';
 import type { LngLat } from '../../core/types';
@@ -134,7 +135,7 @@ export function StreetView({ token, start, segments, onClose, onRate }: Props) {
       <div className="sp-bottom">
         {photo && (
           <button type="button" className="link-btn" onClick={() => onRate(photo.coords, photo)}>
-            ⭐ Diese Stelle bewerten
+            <Icon name="star" size={16} /> Diese Stelle bewerten
           </button>
         )}
         {photo && (

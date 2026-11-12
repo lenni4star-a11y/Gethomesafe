@@ -354,7 +354,7 @@ export function App() {
       <header className="topbar">
         <Wordmark />
         {cities.length > 1 ? (
-          <select className="badge city-select" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+          <select className="badge city-select top" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
             {cities.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -532,6 +532,15 @@ export function App() {
           )}
 
           <div className="time-row">
+            {cities.length > 1 && (
+              <select className="badge city-select inline" aria-label="Stadt" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+                {cities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? 'dunkel' : 'hell'}</span>
             <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
               {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾
