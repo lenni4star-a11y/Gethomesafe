@@ -7,26 +7,18 @@ jobs:
   look:
     runs-on: ubuntu-latest
     steps:
-      - name: BBBike
+      - name: Berlin
         run: |
-          for c in Berlin Zuerich Zurich; do echo "== $c"; curl -sIL https://download.bbbike.org/osm/bbbike/$c/$c.osm.pbf | grep -iE "^HTTP|content-length" ; done
-      - name: Berlin Beleuchtung WFS
+          curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326" -o ot.json
+          python3 -c 'import json; d=json.load(open("ot.json")); print(len(d["features"])); [print(f["properties"]) for f in d["features"][:3]]'
+          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=beleuchtung:beleuchtung&count=20000&outputFormat=application/json&srsName=EPSG:4326" -o l.json
+          python3 -c 'import json,collections; d=json.load(open("l.json")); print(len(d["features"])); c=collections.Counter(f["properties"].get("leuchtentyp") for f in d["features"]); [print(n,k) for k,n in c.most_common(40)]; print(collections.Counter(f["properties"].get("status") for f in d["features"])); print(collections.Counter(f["properties"].get("betriebsart") for f in d["features"]))'
+      - name: Zuerich
         run: |
-          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+|<(wfs:)?Title>[^<]+|outputFormat[^/]*|<ows:Value>[^<]+" | head -40
-          echo; echo "--- Beispiel"
-          T=$(curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -1 | sed -E 's/<(wfs:)?Name>//')
-          echo "typeName=$T"
-          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&count=2&outputFormat=application/json&srsName=EPSG:4326" | head -c 1500
-          echo; curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&resultType=hits" | head -c 600
-      - name: Berlin Bezirke / Ortsteile
-        run: |
-          for s in alkis_ortsteile alkis_bezirke; do
-            echo "== $s"
-            curl -sL "https://gdi.berlin.de/services/wfs/$s?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -5
+          for n in Oeffentliche_Beleuchtung_der_Stadt_Zuerich Statistische_Quartiere Stadtkreise; do
+            echo "== $n"; curl -sL "https://www.ogd.stadt-zuerich.ch/wfs/geoportal/$n?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=1.1.0" | grep -oE "<Name>[^<]+|<DefaultSRS>[^<]+|<OtherSRS>[^<]+" | head -8
           done
-          T=$(curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -1 | sed -E 's/<(wfs:)?Name>//')
-          curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&count=1&outputFormat=application/json&srsName=EPSG:4326" | head -c 700
-      - name: Zürich
-        run: |
-          curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=geo_oeffentliche_beleuchtung_der_stadt_zuerich" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; [print(r["format"], r["url"]) for r in d["resources"]]'
-          for q in geo_statistische_quartiere geo_stadtkreise; do echo "== $q"; curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=$q" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; [print(r["format"], r["url"]) for r in d["resources"]]' || true; done
+          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Statistische_Quartiere?format=geojson_link" -o q.json; head -c 900 q.json; echo
+          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Stadtkreise?format=geojson_link" -o k.json; head -c 600 k.json; echo
+          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Oeffentliche_Beleuchtung_der_Stadt_Zuerich?format=geojson_link" -o zl.json; ls -la zl.json; head -c 900 zl.json; echo
+          python3 -c 'import json,collections; d=json.load(open("zl.json")); print(len(d["features"])); print(collections.Counter(f["properties"].get("art_txt") or f["properties"].get("ART_TXT") for f in d["features"]).most_common(20))' || true
