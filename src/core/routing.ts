@@ -1,6 +1,6 @@
 import { distance } from './geo';
 import type { Graph } from './graph';
-import { edgeRisk, WEIGHTS, type SafetyContext } from './safety';
+import { edgeRisk, parkClosed, WEIGHTS, type SafetyContext } from './safety';
 import { WayKind, type Edge, type LngLat } from './types';
 
 /** Gehgeschwindigkeit in m/s (≈ 4,7 km/h) */
@@ -39,6 +39,8 @@ export function findRoute(graph: Graph, from: LngLat, to: LngLat, mode: RouteMod
   const goalC = graph.coords[goal];
 
   const cost = (e: Edge): number => {
+    // zugesperrter Park: nie durchführen (auch nicht beim schnellsten Weg)
+    if (e.parkHours && parkClosed(e, ctx.date)) return Infinity;
     if (mode === 'fastest') return edgeSeconds(e) * WALK_SPEED;
     let r = riskCache[e.id];
     if (r < 0) riskCache[e.id] = r = edgeRisk(e, graph.pois, ctx).risk;

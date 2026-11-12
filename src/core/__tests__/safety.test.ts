@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createContext, edgeClass, edgeRisk } from '../safety';
+import { createContext, edgeClass, edgeRisk, parkClosed } from '../safety';
 import { Flag, WayKind, type Edge } from '../types';
 
 const edge = (over: Partial<Edge> = {}): Edge => ({
@@ -18,6 +18,15 @@ describe('Farbstufen', () => {
   it('schlechte Bewertung macht auch beleuchtete Wege rot', () => {
     const ctx = createContext(night, true, { rating: () => ({ average: 1.5, count: 2 }) });
     expect(edgeClass(edge(), ctx)).toBe('bad');
+  });
+});
+
+describe('nachts zugesperrte Parks', () => {
+  it('gesperrt außerhalb der Öffnungszeiten, offen tagsüber, ohne Zeiten nie gesperrt', () => {
+    const p = edge({ flags: Flag.Park, parkHours: 'Mo-Su 06:00-22:00' });
+    expect(parkClosed(p, night)).toBe(true);
+    expect(parkClosed(p, new Date('2026-11-06T14:00:00+01:00'))).toBe(false);
+    expect(parkClosed(edge({ flags: Flag.Park }), night)).toBe(false);
   });
 });
 

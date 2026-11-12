@@ -62,6 +62,8 @@ export type RawEdge = [
   works?: string[],
   /** Geschäfte/Lokale im Erdgeschoss direkt am Weg, pro 100 m (unabhängig von Öffnungszeiten; ab Datenstand Nov. 2026) */
   frontage?: number,
+  /** Öffnungszeiten des Parks, in dem der Weg liegt (z. B. nachts zugesperrt); fehlt = immer offen */
+  parkHours?: string,
 ];
 
 export interface DistrictFile {
@@ -139,6 +141,8 @@ export interface Edge {
   works: string[];
   /** Geschäfte/Lokale im Erdgeschoss pro 100 m („Geschäftsstraße“), 0 wenn unbekannt */
   frontage?: number;
+  /** Öffnungszeiten des Parks (OSM opening_hours), außerhalb davon ist der Weg gesperrt */
+  parkHours?: string;
   flags: number;
   /** Punkte von a nach b, inklusive Endpunkte */
   coords: LngLat[];

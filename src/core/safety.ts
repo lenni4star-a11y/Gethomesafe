@@ -124,6 +124,12 @@ export function lifeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): n
 }
 
 /** Geschäftsstraße → Risiko für „Belebtheit“, wenn nichts geöffnet hat (1 = keine Geschäfte) */
+/** Liegt der Weg in einem Park, der zu dieser Zeit zugesperrt ist (z. B. nachts)? Unbekannt = offen. */
+export function parkClosed(e: Edge, date: Date): boolean {
+  if (!e.parkHours) return false;
+  return openState({ id: 'park:' + e.parkHours, cat: 'culture', name: null, oh: e.parkHours, kind: null, lon: 0, lat: 0 } as Poi, date) === 'closed';
+}
+
 export function frontageRisk(e: Edge): number {
   const f = e.frontage ?? 0;
   // Schwellen nach echten Daten (Nov. 2026): Neubaugasse ~25, Reindorfgasse ~10, Mariahilfer Str. im 15. ~6 pro 100 m

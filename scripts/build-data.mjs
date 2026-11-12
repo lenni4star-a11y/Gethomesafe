@@ -566,10 +566,13 @@ async function buildCity(city, acc) {
 
   log('OSM 1/3: Relationen (große Parks)');
   const greenRelWays = new Map(); // wayId -> relationId
+  const relHours = new Map(); // relationId -> Öffnungszeiten (nachts zugesperrte Parks)
+  const parkHours = (t) => (t.leisure === 'park' || t.leisure === 'garden') && t.opening_hours && !/^24\/7$/.test(t.opening_hours.trim()) ? t.opening_hours : null;
   for await (const item of createOSMStream(pbf, { withInfo: false })) {
     if (item.type !== 'relation') continue;
     const t = item.tags ?? {};
     if (t.type !== 'multipolygon' || !isGreen(t)) continue;
+    if (parkHours(t)) relHours.set(item.id, parkHours(t));
     for (const m of item.members) if (m.type === 'way' && m.role !== 'inner') greenRelWays.set(m.ref, item.id);
   }
 
@@ -590,7 +593,8 @@ async function buildCity(city, acc) {
       continue;
     }
     if ((t.area !== 'no' && isGreen(t)) || greenRelWays.has(item.id)) {
-      greenWays.push({ id: item.id, refs: item.refs, rel: greenRelWays.get(item.id), closed: item.refs[0] === item.refs.at(-1) });
+      const rel = greenRelWays.get(item.id);
+      greenWays.push({ id: item.id, refs: item.refs, rel, closed: item.refs[0] === item.refs.at(-1), hours: parkHours(t) ?? (rel ? relHours.get(rel) : null) ?? null });
       item.refs.forEach((r) => needed.add(r));
     }
     const cat = poiCategory(t);
@@ -658,17 +662,21 @@ async function buildCity(city, acc) {
 
   // 5. Grünflächen-Polygone bauen (offene Teile von Relationen zusammensetzen)
   const greenPolys = [];
+  const hoursPolys = []; // Parks mit Öffnungszeiten (z. B. nachts zugesperrt)
   const relParts = new Map();
   for (const g of greenWays) {
     const pts = g.refs.map((r) => coord.get(r));
     if (pts.some((p) => !p)) continue;
-    if (g.closed) greenPolys.push([pts]);
+    if (g.closed) {
+      greenPolys.push([pts]);
+      if (g.hours) hoursPolys.push({ poly: [pts], hours: g.hours });
+    }
     else if (g.rel) {
       if (!relParts.has(g.rel)) relParts.set(g.rel, []);
       relParts.get(g.rel).push(pts);
     }
   }
-  for (const parts of relParts.values()) {
+  for (const [relId, parts] of relParts) {
     while (parts.length) {
       let ring = parts.pop();
       let grown = true;
@@ -685,7 +693,10 @@ async function buildCity(city, acc) {
           break;
         }
       }
-      if (dist(ring[0], ring.at(-1)) < 0.01) greenPolys.push([ring]);
+      if (dist(ring[0], ring.at(-1)) < 0.01) {
+        greenPolys.push([ring]);
+        if (relHours.has(relId)) hoursPolys.push({ poly: [ring], hours: relHours.get(relId) });
+      }
     }
   }
   const greenGrid = new Grid(200);
@@ -695,6 +706,10 @@ async function buildCity(city, acc) {
     greenGrid.addBox(bb, p);
   }
   const inGreen = (pt) => greenGrid.at(pt[0], pt[1]).some((p) => pointInPolygon(pt, p));
+  const hoursGrid = new Grid(200);
+  for (const h of hoursPolys) hoursGrid.addBox(bboxOf(h.poly[0]), h);
+  const hoursAt = (pt) => hoursGrid.at(pt[0], pt[1]).find((h) => pointInPolygon(pt, h.poly))?.hours ?? null;
+  log('  Parks mit Öffnungszeiten:', hoursPolys.length);
   log('  Grünflächen:', greenPolys.length);
 
   // 6. Netz bauen: Wege an Kreuzungen teilen
@@ -803,7 +818,9 @@ async function buildCity(city, acc) {
       const poiIds = [...near].map((pi) => pois[pi].id);
       poiIds.forEach((id) => file.pois.add(id));
       // Schema siehe src/core/types.ts (RawEdge)
-      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage]);
+      // Weg in einem Park mit Öffnungszeiten (z. B. nachts zugesperrt): Zeiten mitgeben, die App sperrt den Weg dann
+      const ph = KIND[r.kind] >= KIND.pedestrian ? hoursAt(mid) : null;
+      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage, ...(ph ? [ph] : [])]);
       edgeCount++;
     }
   }
