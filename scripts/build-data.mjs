@@ -44,14 +44,59 @@ const CITIES = [
   ...(config.linz ? [{ id: 'linz', name: 'Linz', pilot: config.linz.bezirke, durchgang: config.linz.durchgang ?? [], offset: 100, prefix: 'linz' }] : []),
   // Berlin: ganze Stadt (alle 97 Ortsteile), weil man vom Feiern überallhin heimfährt
   ...(config.berlin ? [{ id: 'berlin', name: 'Berlin', pilot: config.berlin.ortsteile ?? 'alle', durchgang: [], offset: 200, prefix: 'berlin' }] : []),
+  // Zürich: ganze Stadt (34 statistische Quartiere)
+  ...(config.zuerich ? [{ id: 'zuerich', name: 'Zürich', pilot: config.zuerich.quartiere ?? 'alle', durchgang: [], offset: 400, prefix: 'zuerich' }] : []),
 ];
-const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5 };
+const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37 };
 
 const PBF_URL = {
   wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf',
   linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf',
   berlin: 'https://download.bbbike.org/osm/bbbike/Berlin/Berlin.osm.pbf',
+  zuerich: 'https://download.bbbike.org/osm/bbbike/Zuerich/Zuerich.osm.pbf',
 };
+// Stadt Zürich Open Data (Geoportal, CC0): statistische Quartiere und öffentliche Beleuchtung
+const ZH_WFS = (layer, type) => `https://www.ogd.stadt-zuerich.ch/wfs/geoportal/${layer}?service=WFS&version=1.1.0&request=GetFeature&typename=${type}&srsName=EPSG:4326`;
+
+/** GeoJSON von einem WFS holen; probiert die üblichen Namen für das Ausgabeformat */
+async function wfsGeoJson(url, file) {
+  const target = path.join(RAW, file);
+  if (fs.existsSync(target) && !REFRESH) return readJson(target);
+  for (const fmt of ['application/json', 'GeoJSON', 'geojson', 'json']) {
+    const res = await fetch(`${url}&outputFormat=${encodeURIComponent(fmt)}`);
+    if (!res.ok) continue;
+    const text = await res.text();
+    if (!text.trim().startsWith('{')) continue;
+    fs.writeFileSync(target, text);
+    log('  WFS-Format', fmt, 'für', file);
+    return JSON.parse(text);
+  }
+  throw new Error('Kein GeoJSON vom WFS: ' + url);
+}
+
+/** Längen-/Breitengrad-Reihenfolge prüfen (manche Server liefern lat,lon) */
+const lonLat = (c) => (c[0] > 40 && c[1] < 20 ? [c[1], c[0]] : [c[0], c[1]]);
+
+async function zuerichDistricts() {
+  const d = await wfsGeoJson(ZH_WFS('Statistische_Quartiere', 'adm_statistische_quartiere_map'), 'zuerich-quartiere.json');
+  log('  Quartier-Felder:', Object.keys(d.features[0]?.properties ?? {}).join(', '));
+  return d.features
+    .map((f) => {
+      const p = f.properties ?? {};
+      const name = p.qname ?? p.QNAME ?? p.name ?? Object.values(p).find((v) => typeof v === 'string' && /[a-zäöü]/.test(v)) ?? 'Quartier';
+      const num = Number(p.qnr ?? p.QNR ?? p.objid ?? 0);
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      polys.sort((a, b) => b[0].length - a[0].length);
+      return { num, name, poly: polys[0].map((ring) => ring.map(lonLat)) };
+    })
+    .sort((a, b) => a.num - b.num || a.name.localeCompare(b.name))
+    .map((q, i) => ({ nr: i + 1, name: q.name, poly: q.poly }));
+}
+
+async function zuerichLamps() {
+  const d = await wfsGeoJson(ZH_WFS('Oeffentliche_Beleuchtung_der_Stadt_Zuerich', 'ewz_brennstelle_p'), 'zuerich-leuchten.json');
+  return d.features.map((f) => (f.geometry?.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry?.coordinates)).filter(Boolean).map(lonLat);
+}
 // Berlin (Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0): Ortsteile und öffentliche Beleuchtung
 const BERLIN_OT = 'https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326';
 const BERLIN_LAMPS = 'https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=beleuchtung:beleuchtung&outputFormat=application/json&srsName=EPSG:4326';
@@ -279,6 +324,58 @@ async function berlinDistricts() {
     });
 }
 
+// Amtliche Einschätzungen der Polizei Berlin (nur als kleiner Abzug, Quelle wird in der App genannt):
+// 1. Kriminalitätsatlas: Straßenraub + gefährliche Körperverletzung je Bezirksregion, als Dichte (Fälle pro km²),
+//    nicht pro Einwohner*in (sonst wirken Ausgehviertel und Bahnhöfe mit wenigen Bewohner*innen extrem).
+//    Oberste 10 % → Stufe 2, nächste 15 % → Stufe 1.
+// 2. Kriminalitätsbelastete Orte (kbO) laut Polizei Berlin, gültig ab 1.7.2026, als ungefähre Kreise → Stufe 3.
+//    Rigaer Straße ist bewusst nicht dabei: Die Einstufung beruht vor allem auf politisch motivierten Taten
+//    bei Demonstrationen, nicht auf Gefahren für Menschen auf dem Heimweg.
+const BERLIN_BZR = 'https://gdi.berlin.de/services/wfs/lor_2021?service=WFS&version=2.0.0&request=GetFeature&typeNames=lor_2021:b_lor_bzr_2021&outputFormat=application/json&srsName=EPSG:4326';
+const BERLIN_KBO = [
+  { name: 'Alexanderplatz', at: [13.4132, 52.5219], r: 350 },
+  { name: 'Görlitzer Park/Wrangelkiez', at: [13.4372, 52.4967], r: 480 },
+  { name: 'Hermannplatz/Donaukiez', at: [13.4245, 52.4869], r: 330 },
+  { name: 'Hermannstraße/Bahnhof Neukölln', at: [13.4295, 52.4775], r: 330 },
+  { name: 'Hermannstraße/Bahnhof Neukölln', at: [13.4352, 52.4685], r: 330 },
+  { name: 'Kottbusser Tor', at: [13.4180, 52.4991], r: 250 },
+  { name: 'Warschauer Brücke', at: [13.4491, 52.5058], r: 300 },
+];
+
+async function berlinCrime() {
+  const file = path.join(RAW, 'berlin-krimi.json');
+  if (!fs.existsSync(file)) {
+    log('  Kein Kriminalitätsatlas (scripts/krimi-berlin.py nicht gelaufen) – ohne Abzug weiter.');
+    return null;
+  }
+  const atlas = readJson(file);
+  const bzr = readJson(await download(BERLIN_BZR, 'berlin-bzr.json'));
+  const areaKm2 = (ring) => {
+    let a = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += (ring[j][0] * MX - ring[i][0] * MX) * (ring[j][1] * MY + ring[i][1] * MY);
+    return Math.abs(a / 2) / 1e6;
+  };
+  const regions = [];
+  for (const f of bzr.features) {
+    const code = String(f.properties?.bzr_id ?? f.properties?.BZR_ID ?? f.id ?? '').replace(/^.*\./, '');
+    const a = atlas.regionen[code];
+    if (!a) continue;
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const km2 = polys.reduce((s, p) => s + areaKm2(p[0]), 0) || 1;
+    regions.push({ code, name: a.name, polys, density: (a.raub + a.kv) / km2 });
+  }
+  const sorted = [...regions].sort((x, y) => y.density - x.density);
+  sorted.forEach((r, i) => (r.level = i < sorted.length * 0.1 ? 2 : i < sorted.length * 0.25 ? 1 : 0));
+  log(`  Kriminalitätsatlas ${atlas.jahr}: ${regions.length} Bezirksregionen, am dichtesten: ${sorted.slice(0, 6).map((r) => r.name).join(', ')}`);
+  const grid = new Grid(500);
+  for (const r of regions) if (r.level) for (const p of r.polys) grid.addBox(bboxOf(p[0]), { r, p });
+  return (pt) => {
+    for (const k of BERLIN_KBO) if (dist(pt, k.at) <= k.r) return 3;
+    const hit = grid.at(pt[0], pt[1]).find((h) => pointInPolygon(pt, h.p));
+    return hit ? hit.r.level : 0;
+  };
+}
+
 /** Alle öffentlichen Leuchten in Berlin (ca. 210.000), seitenweise abgefragt; ohne Schaltkästen und außer Betrieb */
 async function berlinLamps() {
   const file = path.join(RAW, 'berlin-leuchten.json');
@@ -318,7 +415,8 @@ async function buildCity(city, acc) {
       poly: f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates[0],
     }));
   } else if (city.id === 'linz') raw = await linzDistricts();
-  else raw = await berlinDistricts();
+  else if (city.id === 'berlin') raw = await berlinDistricts();
+  else raw = await zuerichDistricts();
   const PILOT = city.pilot === 'alle' ? raw.map((b) => b.nr) : city.pilot.map(Number);
   const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
   const BEZIRKE = [...PILOT, ...TRANSIT];
@@ -350,14 +448,15 @@ async function buildCity(city, acc) {
       lampGrid.add(lon, lat, [lon, lat]);
       lampCount++;
     }
-  } else if (city.id === 'berlin') {
-    for (const [lon, lat] of await berlinLamps()) {
+  } else if (city.id === 'berlin' || city.id === 'zuerich') {
+    for (const [lon, lat] of city.id === 'berlin' ? await berlinLamps() : await zuerichLamps()) {
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
       lampCount++;
     }
   }
   log('Leuchten der Stadt im Gebiet:', lampCount);
+  const crimeAt = city.id === 'berlin' ? await berlinCrime() : null;
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);
@@ -520,10 +619,13 @@ async function buildCity(city, acc) {
 
   log('OSM 1/3: Relationen (große Parks)');
   const greenRelWays = new Map(); // wayId -> relationId
+  const relHours = new Map(); // relationId -> Öffnungszeiten (nachts zugesperrte Parks)
+  const parkHours = (t) => (t.leisure === 'park' || t.leisure === 'garden') && t.opening_hours && !/^24\/7$/.test(t.opening_hours.trim()) ? t.opening_hours : null;
   for await (const item of createOSMStream(pbf, { withInfo: false })) {
     if (item.type !== 'relation') continue;
     const t = item.tags ?? {};
     if (t.type !== 'multipolygon' || !isGreen(t)) continue;
+    if (parkHours(t)) relHours.set(item.id, parkHours(t));
     for (const m of item.members) if (m.type === 'way' && m.role !== 'inner') greenRelWays.set(m.ref, item.id);
   }
 
@@ -544,7 +646,8 @@ async function buildCity(city, acc) {
       continue;
     }
     if ((t.area !== 'no' && isGreen(t)) || greenRelWays.has(item.id)) {
-      greenWays.push({ id: item.id, refs: item.refs, rel: greenRelWays.get(item.id), closed: item.refs[0] === item.refs.at(-1) });
+      const rel = greenRelWays.get(item.id);
+      greenWays.push({ id: item.id, refs: item.refs, rel, closed: item.refs[0] === item.refs.at(-1), hours: parkHours(t) ?? (rel ? relHours.get(rel) : null) ?? null });
       item.refs.forEach((r) => needed.add(r));
     }
     const cat = poiCategory(t);
@@ -612,17 +715,21 @@ async function buildCity(city, acc) {
 
   // 5. Grünflächen-Polygone bauen (offene Teile von Relationen zusammensetzen)
   const greenPolys = [];
+  const hoursPolys = []; // Parks mit Öffnungszeiten (z. B. nachts zugesperrt)
   const relParts = new Map();
   for (const g of greenWays) {
     const pts = g.refs.map((r) => coord.get(r));
     if (pts.some((p) => !p)) continue;
-    if (g.closed) greenPolys.push([pts]);
+    if (g.closed) {
+      greenPolys.push([pts]);
+      if (g.hours) hoursPolys.push({ poly: [pts], hours: g.hours });
+    }
     else if (g.rel) {
       if (!relParts.has(g.rel)) relParts.set(g.rel, []);
       relParts.get(g.rel).push(pts);
     }
   }
-  for (const parts of relParts.values()) {
+  for (const [relId, parts] of relParts) {
     while (parts.length) {
       let ring = parts.pop();
       let grown = true;
@@ -639,7 +746,10 @@ async function buildCity(city, acc) {
           break;
         }
       }
-      if (dist(ring[0], ring.at(-1)) < 0.01) greenPolys.push([ring]);
+      if (dist(ring[0], ring.at(-1)) < 0.01) {
+        greenPolys.push([ring]);
+        if (relHours.has(relId)) hoursPolys.push({ poly: [ring], hours: relHours.get(relId) });
+      }
     }
   }
   const greenGrid = new Grid(200);
@@ -649,6 +759,10 @@ async function buildCity(city, acc) {
     greenGrid.addBox(bb, p);
   }
   const inGreen = (pt) => greenGrid.at(pt[0], pt[1]).some((p) => pointInPolygon(pt, p));
+  const hoursGrid = new Grid(200);
+  for (const h of hoursPolys) hoursGrid.addBox(bboxOf(h.poly[0]), h);
+  const hoursAt = (pt) => hoursGrid.at(pt[0], pt[1]).find((h) => pointInPolygon(pt, h.poly))?.hours ?? null;
+  log('  Parks mit Öffnungszeiten:', hoursPolys.length);
   log('  Grünflächen:', greenPolys.length);
 
   // 6. Netz bauen: Wege an Kreuzungen teilen
@@ -757,7 +871,12 @@ async function buildCity(city, acc) {
       const poiIds = [...near].map((pi) => pois[pi].id);
       poiIds.forEach((id) => file.pois.add(id));
       // Schema siehe src/core/types.ts (RawEdge)
-      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage]);
+      // Weg in einem Park mit Öffnungszeiten (z. B. nachts zugesperrt): Zeiten mitgeben, die App sperrt den Weg dann
+      const ph = KIND[r.kind] >= KIND.pedestrian ? hoursAt(mid) : null;
+      // amtliche Kriminalitätseinschätzung (nur Berlin): 0 keine, 1/2 Kriminalitätsatlas, 3 kriminalitätsbelasteter Ort
+      const crime = crimeAt ? crimeAt(mid) : 0;
+      const tail = crime ? [ph ?? null, crime] : ph ? [ph] : [];
+      file.edges.push([a, b, Math.round(len * 10) / 10, KIND[r.kind], nameIdx, osmLit, lampCov, f2, geom, poiIds, mlyCov, [...works], frontage, ...tail]);
       edgeCount++;
     }
   }
@@ -770,7 +889,9 @@ async function buildCity(city, acc) {
     isWien
       ? 'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen'
       : city.id === 'berlin'
-        ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung'
+        ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung, Bezirksregionen; Polizei Berlin: Kriminalitätsatlas (CC BY-SA), kriminalitätsbelastete Orte'
+        : city.id === 'zuerich'
+          ? 'Datenquelle: Stadt Zürich Open Data (CC0): statistische Quartiere, öffentliche Beleuchtung'
         : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
   if (mlyCount) acc.mapillary = true;
@@ -819,6 +940,17 @@ async function buildCity(city, acc) {
     log(`  ${fname}: ${file.edges.length} Kanten, ${poiList.length} Orte, ${(json.length / 1024).toFixed(0)} KB`);
   }
   acc.stops.push(...stops);
+  // Lokale, Bars, Clubs, Kultur und Hotels mit Namen: für die Suche im Feld „Wohin?“ (auch ohne Photon)
+  const seenPlace = new Set();
+  acc.places[city.id] = pois
+    .filter((p) => p.t.name && ['bar', 'food', 'culture', 'hotel'].includes(p.cat))
+    .filter((p) => {
+      const k = `${p.t.name}|${Math.round(p.lon * 2000)}|${Math.round(p.lat * 2000)}`;
+      if (seenPlace.has(k)) return false;
+      seenPlace.add(k);
+      return true;
+    })
+    .map((p) => [p.t.name, +p.lon.toFixed(5), +p.lat.toFixed(5), p.t.amenity ?? p.t.tourism ?? p.cat, [p.t['addr:street'], p.t['addr:housenumber']].filter(Boolean).join(' ')]);
   if (isWien) acc.extras = { generated: index.generated, taxi, wc, works: worksRaw };
 }
 
@@ -828,6 +960,7 @@ async function main() {
   const acc = {
     index: { generated: new Date().toISOString(), attribution: ['© OpenStreetMap-Mitwirkende (ODbL)'], cities: [], bezirke: [] },
     stops: [],
+    places: {},
     extras: null,
     mapillary: false,
   };
@@ -835,6 +968,11 @@ async function main() {
   if (acc.mapillary) acc.index.attribution.push('Erkannte Straßenlaternen: © Mapillary-Mitwirkende (CC BY-SA 4.0)');
   fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(acc.index));
   fs.writeFileSync(path.join(OUT, 'haltestellen.json'), JSON.stringify(acc.stops));
+  for (const [city, list] of Object.entries(acc.places)) {
+    const json = JSON.stringify(list);
+    fs.writeFileSync(path.join(OUT, `orte-${city}.json`), json);
+    log(`  orte-${city}.json: ${list.length} Lokale/Clubs/Orte, ${(json.length / 1024).toFixed(0)} KB`);
+  }
   // Zusatzdaten der Stadt Wien (klein, für alle Bezirke gemeinsam)
   const extras = acc.extras ?? { generated: acc.index.generated, taxi: [], wc: [], works: [] };
   fs.writeFileSync(path.join(OUT, 'extras.json'), JSON.stringify(extras));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createContext, edgeClass, edgeRisk } from '../safety';
+import { createContext, edgeClass, edgeRisk, parkClosed } from '../safety';
 import { Flag, WayKind, type Edge } from '../types';
 
 const edge = (over: Partial<Edge> = {}): Edge => ({
@@ -18,6 +18,30 @@ describe('Farbstufen', () => {
   it('schlechte Bewertung macht auch beleuchtete Wege rot', () => {
     const ctx = createContext(night, true, { rating: () => ({ average: 1.5, count: 2 }) });
     expect(edgeClass(edge(), ctx)).toBe('bad');
+  });
+});
+
+describe('amtliche Kriminalitätsdaten', () => {
+  it('kleiner Abzug: höchstens etwa ein Punkt, abschaltbar, tagsüber halb so stark', () => {
+    const pois = new Map();
+    const base = edgeRisk(edge(), pois, createContext(night, true)).risk;
+    const kbo = edgeRisk(edge({ crime: 3 }), pois, createContext(night, true)).risk;
+    const off = edgeRisk(edge({ crime: 3 }), pois, createContext(night, true, { crimeData: false })).risk;
+    expect(kbo - base).toBeGreaterThan(0.1);
+    expect(kbo - base).toBeLessThan(0.16);
+    expect(off).toBe(base);
+    const day = new Date('2026-11-06T13:00:00+01:00');
+    const dayDiff = edgeRisk(edge({ crime: 2 }), pois, createContext(day, false)).risk - edgeRisk(edge(), pois, createContext(day, false)).risk;
+    expect(dayDiff).toBeCloseTo(0.055, 2);
+  });
+});
+
+describe('nachts zugesperrte Parks', () => {
+  it('gesperrt außerhalb der Öffnungszeiten, offen tagsüber, ohne Zeiten nie gesperrt', () => {
+    const p = edge({ flags: Flag.Park, parkHours: 'Mo-Su 06:00-22:00' });
+    expect(parkClosed(p, night)).toBe(true);
+    expect(parkClosed(p, new Date('2026-11-06T14:00:00+01:00'))).toBe(false);
+    expect(parkClosed(edge({ flags: Flag.Park }), night)).toBe(false);
   });
 });
 

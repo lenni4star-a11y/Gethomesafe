@@ -35,6 +35,8 @@ export interface Settings {
   showHomeOnMap: boolean;
   /** Prüfwert der Täuschungs-PIN (nie im Klartext), null = keine */
   decoyPinHash: string | null;
+  /** amtliche Kriminalitätsdaten (Berlin: Kriminalitätsatlas, kriminalitätsbelastete Orte) als kleinen Abzug berücksichtigen */
+  crimeData: boolean;
   escort: EscortSettings;
 }
 
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voice: 'auto',
   showHomeOnMap: true,
   decoyPinHash: null,
+  crimeData: true,
   escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1, watchRoute: true, offRouteMeters: 75, offRouteSec: 30, stillMinutes: 3, arrivalMeters: 50 },
 };
 

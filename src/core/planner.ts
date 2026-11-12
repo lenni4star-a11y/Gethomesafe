@@ -137,7 +137,7 @@ export class Planner {
       opt.waitMin ? `${opt.waitMin} min Wartezeit` : 'ohne Wartezeit',
       `${Math.round(walkLen / 10) * 10} m zu Fuß`,
       ctx.dark ? (rides[0].from.lit ? 'Einstiegs-Haltestelle beleuchtet' : 'Einstiegs-Haltestelle: Beleuchtung unbekannt') : null,
-      opt.transfers ? '1 Umstieg' : null,
+      opt.transfers ? `${opt.transfers} ${opt.transfers === 1 ? 'Umstieg' : 'Umstiege'}` : null,
       'Fahrt zählt als sicherer Teil (Fahrgäste, Personal, Notsprechstelle)',
       notFaster ? 'zu Fuß etwa gleich schnell oder schneller' : null,
       'Fahrplan, ohne Live-Verspätungen',

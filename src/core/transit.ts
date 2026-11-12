@@ -155,7 +155,7 @@ export class TransitNetwork {
       | { kind: 'origin'; meters: number }
       | { kind: 'ride'; pattern: number; board: number; alight: number; base: number; fromStop: number }
       | { kind: 'transfer'; fromStop: number; meters: number };
-    const ROUNDS = 2;
+    const ROUNDS = 3; // bis zu 2 Umstiege (in Berlin oft nötig)
     const arr: number[][] = [];
     const parent: (Parent | undefined)[][] = [];
     const n = this.stops.length;

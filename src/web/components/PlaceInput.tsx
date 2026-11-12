@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { searchAddress, searchStops, type Place } from '../geocode';
+import { searchAddress, searchStops, searchVenues, type Place } from '../geocode';
+import { currentCity } from '../region';
 import { SvgIcon } from './Icon';
 
 interface Props {
@@ -39,8 +40,14 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
       abort.current = new AbortController();
       setBusy(true);
       try {
-        const [stops, addresses] = await Promise.all([searchStops(q, bbox), searchAddress(q, bbox, abort.current.signal).catch(() => [])]);
-        setResults([...stops, ...addresses]);
+        const [stops, venues, addresses] = await Promise.all([
+          searchStops(q, bbox),
+          searchVenues(q, currentCity()).catch(() => []),
+          searchAddress(q, bbox, abort.current.signal).catch(() => []),
+        ]);
+        // Doppelte (gleicher Name, fast gleiche Lage) aus der Adresssuche weglassen
+        const dup = (a: Place) => venues.some((v) => v.label === a.label && Math.abs(v.coords[0] - a.coords[0]) < 0.002 && Math.abs(v.coords[1] - a.coords[1]) < 0.002);
+        setResults([...venues, ...stops, ...addresses.filter((a) => !dup(a))].slice(0, 10));
       } finally {
         setBusy(false);
       }
@@ -61,7 +68,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
           aria-expanded={open && results.length > 0}
           aria-controls={listId}
           autoComplete="off"
-          placeholder="Adresse, Ort oder Haltestelle"
+          placeholder="Adresse, Bar, Club oder Haltestelle"
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -104,7 +111,7 @@ export function PlaceInput({ label, value, onChange, bbox, onLocate, onPickOnMap
                 }}
               >
                 <span className="sugg-label">
-                  {r.kind === 'stop' ? <SvgIcon name="tram" /> : null}
+                  {r.kind === 'stop' ? <SvgIcon name="tram" /> : r.kind === 'venue' ? <SvgIcon name="people" /> : null}
                   {r.label}
                 </span>
                 {r.detail && <span className="sugg-detail">{r.detail}</span>}

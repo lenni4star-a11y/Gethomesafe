@@ -8,7 +8,7 @@ export interface Place {
   label: string;
   detail?: string;
   coords: LngLat;
-  kind: 'stop' | 'address' | 'location' | 'map' | 'home' | 'favorite';
+  kind: 'stop' | 'venue' | 'address' | 'location' | 'map' | 'home' | 'favorite';
 }
 
 const STOP_LABEL: Record<Stop['type'], string> = { ubahn: 'U-Bahn', sbahn: 'S-Bahn', tram: 'Straßenbahn', bus: 'Bus' };
@@ -31,6 +31,46 @@ export async function searchStops(q: string, bbox?: [number, number, number, num
       coords: [s.lon, s.lat] as LngLat,
       kind: 'stop' as const,
     }));
+}
+
+const VENUE_LABEL: Record<string, string> = {
+  nightclub: 'Club',
+  bar: 'Bar',
+  pub: 'Kneipe',
+  biergarten: 'Biergarten',
+  restaurant: 'Restaurant',
+  cafe: 'Café',
+  fast_food: 'Imbiss',
+  ice_cream: 'Eis',
+  cinema: 'Kino',
+  theatre: 'Theater',
+  arts_centre: 'Kulturort',
+  events_venue: 'Veranstaltungsort',
+  casino: 'Casino',
+  hotel: 'Hotel',
+  hostel: 'Hostel',
+};
+const venueCache = new Map<string, Promise<[string, number, number, string, string][]>>();
+
+/** Bars, Clubs, Restaurants usw. der Stadt nach Namen suchen (aus den eigenen Daten, ohne Online-Dienst) */
+export async function searchVenues(q: string, city: string): Promise<Place[]> {
+  const n = norm(q.trim());
+  if (n.length < 2) return [];
+  let p = venueCache.get(city);
+  if (!p) {
+    p = fetch(`${import.meta.env.BASE_URL}data/orte-${city}.json`)
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => []);
+    venueCache.set(city, p);
+  }
+  const list = await p;
+  // Clubs und Bars zuerst, dann Treffer am Wortanfang
+  const rank = (kind: string) => (kind === 'nightclub' ? 0 : ['bar', 'pub', 'biergarten'].includes(kind) ? 1 : 2);
+  return list
+    .filter((v) => norm(v[0]).includes(n))
+    .sort((a, b) => Number(!norm(a[0]).startsWith(n)) - Number(!norm(b[0]).startsWith(n)) || rank(a[3]) - rank(b[3]))
+    .slice(0, 5)
+    .map((v) => ({ label: v[0], detail: [VENUE_LABEL[v[3]] ?? 'Ort', v[4]].filter(Boolean).join(' · '), coords: [v[1], v[2]] as LngLat, kind: 'venue' as const }));
 }
 
 export async function searchAddress(q: string, bbox: [number, number, number, number], signal?: AbortSignal): Promise<Place[]> {

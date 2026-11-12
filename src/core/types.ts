@@ -62,6 +62,10 @@ export type RawEdge = [
   works?: string[],
   /** Geschäfte/Lokale im Erdgeschoss direkt am Weg, pro 100 m (unabhängig von Öffnungszeiten; ab Datenstand Nov. 2026) */
   frontage?: number,
+  /** Öffnungszeiten des Parks, in dem der Weg liegt (z. B. nachts zugesperrt); fehlt = immer offen */
+  parkHours?: string | null,
+  /** amtliche Kriminalitätseinschätzung: 0 keine, 1/2 Kriminalitätsatlas erhöht/stark erhöht, 3 kriminalitätsbelasteter Ort (Polizei Berlin) */
+  crime?: number,
 ];
 
 export interface DistrictFile {
@@ -139,6 +143,10 @@ export interface Edge {
   works: string[];
   /** Geschäfte/Lokale im Erdgeschoss pro 100 m („Geschäftsstraße“), 0 wenn unbekannt */
   frontage?: number;
+  /** Öffnungszeiten des Parks (OSM opening_hours), außerhalb davon ist der Weg gesperrt */
+  parkHours?: string;
+  /** 0 keine, 1/2 Kriminalitätsatlas erhöht/stark erhöht, 3 kriminalitätsbelasteter Ort (Polizei Berlin) */
+  crime?: number;
   flags: number;
   /** Punkte von a nach b, inklusive Endpunkte */
   coords: LngLat[];

@@ -213,6 +213,40 @@ HELPLINES.push(
   },
 );
 
+// Schweiz (geprüft im November 2026 beim Bundesamt für Gesundheit)
+HELPLINES.push(
+  {
+    name: 'Die Dargebotene Hand',
+    number: '143',
+    dial: '143',
+    allDay: true,
+    hours: 'rund um die Uhr',
+    description: 'Wenn du jemanden zum Reden brauchst, auch per Chat auf 143.ch.',
+    source: 'https://www.bag.admin.ch/de/hilfsangebote-zur-psychischen-gesundheit',
+    country: 'ch',
+  },
+  {
+    name: 'Opferhilfe Schweiz',
+    number: '142',
+    dial: '142',
+    allDay: false,
+    hours: 'Zeiten auf der Website',
+    description: 'Für Menschen, die Gewalt oder einen Übergriff erlebt haben. Kostenlos, vertraulich, anonym.',
+    source: 'https://www.bag.admin.ch/de/hilfsangebote-zur-psychischen-gesundheit',
+    country: 'ch',
+  },
+  {
+    name: 'Pro Juventute',
+    number: '147',
+    dial: '147',
+    allDay: true,
+    hours: 'rund um die Uhr',
+    description: 'Für Kinder und Jugendliche.',
+    source: 'https://www.bag.admin.ch/de/hilfsangebote-zur-psychischen-gesundheit',
+    country: 'ch',
+  },
+);
+
 /** Hilfsstellen für eine Stadt: landesweite plus regionale, regionale zuerst */
 export const helplinesFor = (city: string) => {
   const country = COUNTRY_OF[city] ?? 'at';
