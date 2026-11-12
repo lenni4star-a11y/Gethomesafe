@@ -40,5 +40,9 @@
   "berlin": {
     "_hinweis": "Berlin: ganze Stadt (alle 97 Ortsteile), weil man vom Feiern überallhin heimfährt. Statt 'alle' kann hier auch eine Liste von Ortsteil-Nummern stehen.",
     "ortsteile": "alle"
+  },
+  "zuerich": {
+    "_hinweis": "Zürich: ganze Stadt (34 statistische Quartiere, Stadt Zürich Open Data).",
+    "quartiere": "alle"
   }
 }

@@ -7,6 +7,8 @@ describe('Notrufnummern und Hilfsstellen je Stadt', () => {
     expect(emergencyFor('linz').map((e) => e.number)).toEqual(['133', '144', '112']);
     expect(emergencyFor('berlin').map((e) => e.number)).toEqual(['110', '112']);
     expect(emergencyText('berlin')).toBe('110 (Polizei) oder 112');
+    expect(emergencyFor('zuerich').map((e) => e.number)).toEqual(['117', '144', '112']);
+    expect(helplinesFor('zuerich').map((h) => h.number)).toContain('143');
   });
 
   it('zeigt nur Hilfsstellen des eigenen Landes und der eigenen Stadt', () => {

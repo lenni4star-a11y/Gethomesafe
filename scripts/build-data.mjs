@@ -44,14 +44,59 @@ const CITIES = [
   ...(config.linz ? [{ id: 'linz', name: 'Linz', pilot: config.linz.bezirke, durchgang: config.linz.durchgang ?? [], offset: 100, prefix: 'linz' }] : []),
   // Berlin: ganze Stadt (alle 97 Ortsteile), weil man vom Feiern überallhin heimfährt
   ...(config.berlin ? [{ id: 'berlin', name: 'Berlin', pilot: config.berlin.ortsteile ?? 'alle', durchgang: [], offset: 200, prefix: 'berlin' }] : []),
+  // Zürich: ganze Stadt (34 statistische Quartiere)
+  ...(config.zuerich ? [{ id: 'zuerich', name: 'Zürich', pilot: config.zuerich.quartiere ?? 'alle', durchgang: [], offset: 400, prefix: 'zuerich' }] : []),
 ];
-const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5 };
+const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37 };
 
 const PBF_URL = {
   wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf',
   linz: 'https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf',
   berlin: 'https://download.bbbike.org/osm/bbbike/Berlin/Berlin.osm.pbf',
+  zuerich: 'https://download.bbbike.org/osm/bbbike/Zuerich/Zuerich.osm.pbf',
 };
+// Stadt Zürich Open Data (Geoportal, CC0): statistische Quartiere und öffentliche Beleuchtung
+const ZH_WFS = (layer, type) => `https://www.ogd.stadt-zuerich.ch/wfs/geoportal/${layer}?service=WFS&version=1.1.0&request=GetFeature&typename=${type}&srsName=EPSG:4326`;
+
+/** GeoJSON von einem WFS holen; probiert die üblichen Namen für das Ausgabeformat */
+async function wfsGeoJson(url, file) {
+  const target = path.join(RAW, file);
+  if (fs.existsSync(target) && !REFRESH) return readJson(target);
+  for (const fmt of ['application/json', 'GeoJSON', 'geojson', 'json']) {
+    const res = await fetch(`${url}&outputFormat=${encodeURIComponent(fmt)}`);
+    if (!res.ok) continue;
+    const text = await res.text();
+    if (!text.trim().startsWith('{')) continue;
+    fs.writeFileSync(target, text);
+    log('  WFS-Format', fmt, 'für', file);
+    return JSON.parse(text);
+  }
+  throw new Error('Kein GeoJSON vom WFS: ' + url);
+}
+
+/** Längen-/Breitengrad-Reihenfolge prüfen (manche Server liefern lat,lon) */
+const lonLat = (c) => (c[0] > 40 && c[1] < 20 ? [c[1], c[0]] : [c[0], c[1]]);
+
+async function zuerichDistricts() {
+  const d = await wfsGeoJson(ZH_WFS('Statistische_Quartiere', 'adm_statistische_quartiere_map'), 'zuerich-quartiere.json');
+  log('  Quartier-Felder:', Object.keys(d.features[0]?.properties ?? {}).join(', '));
+  return d.features
+    .map((f) => {
+      const p = f.properties ?? {};
+      const name = p.qname ?? p.QNAME ?? p.name ?? Object.values(p).find((v) => typeof v === 'string' && /[a-zäöü]/.test(v)) ?? 'Quartier';
+      const num = Number(p.qnr ?? p.QNR ?? p.objid ?? 0);
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      polys.sort((a, b) => b[0].length - a[0].length);
+      return { num, name, poly: polys[0].map((ring) => ring.map(lonLat)) };
+    })
+    .sort((a, b) => a.num - b.num || a.name.localeCompare(b.name))
+    .map((q, i) => ({ nr: i + 1, name: q.name, poly: q.poly }));
+}
+
+async function zuerichLamps() {
+  const d = await wfsGeoJson(ZH_WFS('Oeffentliche_Beleuchtung_der_Stadt_Zuerich', 'ewz_brennstelle_p'), 'zuerich-leuchten.json');
+  return d.features.map((f) => (f.geometry?.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry?.coordinates)).filter(Boolean).map(lonLat);
+}
 // Berlin (Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0): Ortsteile und öffentliche Beleuchtung
 const BERLIN_OT = 'https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326';
 const BERLIN_LAMPS = 'https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=beleuchtung:beleuchtung&outputFormat=application/json&srsName=EPSG:4326';
@@ -318,7 +363,8 @@ async function buildCity(city, acc) {
       poly: f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates[0],
     }));
   } else if (city.id === 'linz') raw = await linzDistricts();
-  else raw = await berlinDistricts();
+  else if (city.id === 'berlin') raw = await berlinDistricts();
+  else raw = await zuerichDistricts();
   const PILOT = city.pilot === 'alle' ? raw.map((b) => b.nr) : city.pilot.map(Number);
   const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
   const BEZIRKE = [...PILOT, ...TRANSIT];
@@ -350,8 +396,8 @@ async function buildCity(city, acc) {
       lampGrid.add(lon, lat, [lon, lat]);
       lampCount++;
     }
-  } else if (city.id === 'berlin') {
-    for (const [lon, lat] of await berlinLamps()) {
+  } else if (city.id === 'berlin' || city.id === 'zuerich') {
+    for (const [lon, lat] of city.id === 'berlin' ? await berlinLamps() : await zuerichLamps()) {
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
       lampCount++;
@@ -771,6 +817,8 @@ async function buildCity(city, acc) {
       ? 'Datenquelle: Stadt Wien – data.wien.gv.at (CC BY 4.0): Bezirksgrenzen, Leuchtenstandorte, Haltestellen, Polizei, Taxistandplätze, öffentliche WCs, Baustellen'
       : city.id === 'berlin'
         ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung'
+        : city.id === 'zuerich'
+          ? 'Datenquelle: Stadt Zürich Open Data (CC0): statistische Quartiere, öffentliche Beleuchtung'
         : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
   if (mlyCount) acc.mapillary = true;
