@@ -7,34 +7,28 @@ jobs:
   look:
     runs-on: ubuntu-latest
     steps:
-      - name: BBBike Linz
-        run: curl -sIL https://download.bbbike.org/osm/bbbike/Linz/Linz.osm.pbf | grep -iE "^HTTP|content-length|last-modified" || true
-      - name: data.gv.at Linz
+      - name: Katalog data.linz.gv.at (mehrere Ebenen)
         run: |
-          for q in "linz" "linz%20ag" "linz%20haltestellen" "linz%20beleuchtung" "linz%20bezirke" "gtfs" "oberösterreich%20beleuchtung"; do
-            echo "=== $q"
-            curl -s "https://www.data.gv.at/katalog/api/3/action/package_search?q=$q&rows=400" | python3 -c '
-          import json,sys,re
-          d=json.load(sys.stdin)["result"]
-          print("count",d["count"])
-          kw=re.compile(r"halte|leucht|beleucht|bezirk|stadtteil|gtfs|fahrplan|wc|toilet|polizei|taxi|park|grenz|linie",re.I)
-          for p in d["results"]:
-            org=(p.get("organization") or {}).get("name","")
-            t=p["title"]
-            if ("linz" in (t+org).lower() or "gtfs" in t.lower() or "ober" in (t+org).lower()) and kw.search(t):
-              print("*",t,"|",org,"|",(p.get("license_title") or p.get("license_id")),"|",p.get("metadata_modified","")[:10])
-              for r in p.get("resources",[])[:6]:
-                print("    ",r.get("format"),r.get("url"))
-          ' || true
-          done
-      - name: OSM Grenzen in Linz (Overpass)
+          python3 - <<'PY'
+          import re, urllib.request
+          base = "https://data.linz.gv.at/katalog/"
+          def ls(url):
+              try:
+                  html = urllib.request.urlopen(url, timeout=30).read().decode("utf8", "ignore")
+              except Exception as e:
+                  return []
+              return [h for h in re.findall(r'href="(\./[^"]+)"', html)]
+          def walk(url, depth):
+              for h in ls(url):
+                  u = url + h[2:]
+                  if h.endswith("/"):
+                      if depth < 4:
+                          walk(u, depth + 1)
+                  else:
+                      print(u.replace(base, ""))
+          for top in ["geodata/", "verkehr/", "linz_ag/", "stadt/", "linz_service/", "population/", "externe_daten/", "umwelt/", "Freizeit/"]:
+              walk(base + top, 1)
+          PY
+      - name: Overpass Linz Grenzen
         run: |
-          curl -s --data-urlencode 'data=[out:json][timeout:60];area["name"="Linz"]["admin_level"="8"]->.a;rel(area.a)["boundary"];out tags;' https://overpass-api.de/api/interpreter | python3 -c '
-          import json,sys
-          for e in json.load(sys.stdin)["elements"]:
-            t=e["tags"]; print(e["id"],t.get("boundary"),t.get("admin_level"),t.get("name"),t.get("ref",""))
-          ' | sort -k3 | head -80
-      - name: Linz Open Data Portal
-        run: |
-          curl -sL https://data.linz.gv.at/ | grep -oiE 'href="[^"]*(katalog|geo|halte|leucht)[^"]*"' | sort -u | head -60 || true
-          curl -sL "https://data.linz.gv.at/katalog/" | grep -oE 'href="[^"]+"' | head -80 || true
+          curl -s -m 120 --data-urlencode 'data=[out:json][timeout:90];rel["name"="Linz"]["boundary"="administrative"];map_to_area->.a;rel(area.a)["boundary"="administrative"];out tags;' https://overpass-api.de/api/interpreter | head -c 5000
