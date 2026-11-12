@@ -1,5 +1,5 @@
-# Nur zum Nachschauen, welche offenen Daten es für Linz gibt (wird danach wieder gelöscht)
-name: Daten erkunden (Linz)
+# Nur zum Nachschauen, welche offenen Daten es gibt (wird danach wieder gelöscht)
+name: Daten erkunden
 on:
   push:
     branches: [erkunden-linz]
@@ -7,12 +7,26 @@ jobs:
   look:
     runs-on: ubuntu-latest
     steps:
-      - name: Bezirke
+      - name: BBBike
         run: |
-          B=https://data.linz.gv.at/katalog/geodata
-          curl -sL $B/statistisch_bezirke/2014/StatBez_Linz_EPSG_4326.gml -o g.gml; ls -la g.gml; head -c 2500 g.gml; echo; echo ...
-          grep -oE '<[A-Za-z_:]+' g.gml | sort | uniq -c | sort -rn | head -30
-          curl -sL $B/statistisch_bezirke/2014/statistische_bezirke.csv | head -25
-          curl -sL $B/bezirke/Statistische_Bezirke_20250428.zip -o b.zip; unzip -l b.zip
-      - name: WCs
-        run: curl -sL "https://data.linz.gv.at/katalog/Freizeit/toiletten/WC_Anlagen.csv" | head -8
+          for c in Berlin Zuerich Zurich; do echo "== $c"; curl -sIL https://download.bbbike.org/osm/bbbike/$c/$c.osm.pbf | grep -iE "^HTTP|content-length" ; done
+      - name: Berlin Beleuchtung WFS
+        run: |
+          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+|<(wfs:)?Title>[^<]+|outputFormat[^/]*|<ows:Value>[^<]+" | head -40
+          echo; echo "--- Beispiel"
+          T=$(curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -1 | sed -E 's/<(wfs:)?Name>//')
+          echo "typeName=$T"
+          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&count=2&outputFormat=application/json&srsName=EPSG:4326" | head -c 1500
+          echo; curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&resultType=hits" | head -c 600
+      - name: Berlin Bezirke / Ortsteile
+        run: |
+          for s in alkis_ortsteile alkis_bezirke; do
+            echo "== $s"
+            curl -sL "https://gdi.berlin.de/services/wfs/$s?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -5
+          done
+          T=$(curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?request=GetCapabilities&service=WFS" | grep -oE "<(wfs:)?Name>[^<]+" | head -1 | sed -E 's/<(wfs:)?Name>//')
+          curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=$T&count=1&outputFormat=application/json&srsName=EPSG:4326" | head -c 700
+      - name: Zürich
+        run: |
+          curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=geo_oeffentliche_beleuchtung_der_stadt_zuerich" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; [print(r["format"], r["url"]) for r in d["resources"]]'
+          for q in geo_statistische_quartiere geo_stadtkreise; do echo "== $q"; curl -sL "https://data.stadt-zuerich.ch/api/3/action/package_show?id=$q" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; [print(r["format"], r["url"]) for r in d["resources"]]' || true; done
