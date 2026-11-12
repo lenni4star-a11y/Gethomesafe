@@ -759,12 +759,15 @@ input {
 }
 
 .place-marker {
-  width: 16px;
-  height: 16px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border-radius: 50%;
   border: 2px solid #15131f;
   background: #5ee0b0;
+  color: #15131f;
   box-shadow: 0 0 0 2px #5ee0b0;
   font-size: 0;
   line-height: 1;
@@ -774,6 +777,10 @@ input {
 .cat-police {
   background: #7fb2ff;
   box-shadow: 0 0 0 2px #7fb2ff;
+}
+
+.map.far .place-marker svg {
+  display: none;
 }
 
 .map.far .place-marker {

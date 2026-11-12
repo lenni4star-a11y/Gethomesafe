@@ -25,6 +25,13 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Logik getrennt von der Oberfläche:** `src/core/` enthält nur Logik ohne Browser-Funktionen (Routing, Sicherheitswert, Öffnungszeiten, Begleit-Eskalation, Bewertungen) und soll in der nativen App wiederverwendet werden. `src/web/` ist die Web-Oberfläche.
 - **Speicherung nur lokal im Gerät** (IndexedDB über `src/web/storage.ts`), kein Server, keine Accounts.
 - **Pilotgebiet** in `config/gebiet.json`: Bezirke 2, 4, 5, 6, 7, 8, 9, 15, 16; Durchgangs-Bezirke 1 und 3 (Routen dürfen durch, Start/Ziel nicht). Nach Änderung `npm run data`. Daten pro Bezirk getrennt (`public/data/bezirk-XX.json`), die App lädt nur benötigte Bezirke.
+- **Mehrere Städte (Nov. 2026):** Wien, **Linz** und **Berlin** (Fokus: Berlin, ganze Stadt, Thema „gut heim nach dem Feiern“). Stadtauswahl in der Kopfleiste, Stadt wechselt mit dem Standort. Bezirksnummern: Wien 1–23, Linz 101–116 (statistische Bezirke, `linz-XX.json`), Berlin 201–297 (97 Ortsteile nach amtl. Schlüssel, `berlin-XX.json`, zusammen ca. 60 MB, App lädt nur benötigte). `index.json` hat `cities` (Fahrplan/Leuchten vorhanden?).
+  - Linz: keine offenen Leuchtenstandorte, kein GTFS (nur EFA-Schnittstelle der LINZ AG); Haltestellen aus OSM; Bezirksgrenzen Stadt Linz (CC BY 4.0).
+  - Berlin: Ortsteile + alle ~210.000 Leuchten (Geoportal Berlin, Datenlizenz Deutschland – Zero 2.0, ohne Schaltkästen/außer Betrieb), VBB-GTFS (CC BY 4.0) → `transit-berlin.json` (2,7 MB), Linienfarben BVG von Hand. Haltestellen aus OSM.
+  - Notrufnummern, stiller Notruf (AT: DEC112, DE: nora) und Hilfsstellen je Land/Stadt in `src/core/helplines.ts` (`emergencyFor`, `helplinesFor`); Feiertage je Stadt in `openingHours.ts` (`setHolidayRegion`).
+  - Zürich: offene Leuchten (CC0) und Quartiere vorhanden (WFS `ewz_brennstelle_p`, `adm_statistische_quartiere_map`), noch nicht eingebaut.
+- **Verkehrsmittel wie in Karten-Apps:** Reiter Öffis (Standard, wenn Verbindung) · Zu Fuß (angenehmster/schnellster Weg) · Taxi (Taxi-Zentralen anrufen, Uber-Link mit Ziel – nie mit Zuhause –, Bolt/FreeNow öffnen, grobe Zeit) · Roller (nur grobe Zeit, Hinweis Alkohol; kein Radwegenetz). `src/web/components/TravelModes.tsx`.
+- **Anzeige „Gefühl unterwegs“** statt Note 1–10: fünf Balken Rot→Grün mit Wort (sehr angenehm … unangenehm), intern weiter 1–10 (`feelOf`).
 - Datenaufbereitung: `scripts/build-data.mjs` (OSM-Export von BBBike + Stadt Wien Open Data).
 
 ## Datenquellen und Grundsätze
