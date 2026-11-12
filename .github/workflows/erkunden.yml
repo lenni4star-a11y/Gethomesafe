@@ -1,24 +1,32 @@
-# Nur zum Nachschauen, welche offenen Daten es gibt (wird danach wieder gelöscht)
+# Nur zum Prüfen: App bauen und Screenshots machen (wird danach wieder gelöscht)
 name: Daten erkunden
 on:
   push:
     branches: [erkunden-linz]
+permissions:
+  contents: write
 jobs:
   look:
     runs-on: ubuntu-latest
     steps:
-      - name: Berlin
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bauen
+        working-directory: app
+        run: npm ci && npm run build
+      - name: Screenshots
         run: |
-          curl -sL "https://gdi.berlin.de/services/wfs/alkis_ortsteile?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_ortsteile:ortsteile&outputFormat=application/json&srsName=EPSG:4326" -o ot.json
-          python3 -c 'import json; d=json.load(open("ot.json")); print(len(d["features"])); [print(f["properties"]) for f in d["features"][:3]]'
-          curl -sL "https://gdi.berlin.de/services/wfs/beleuchtung?service=WFS&version=2.0.0&request=GetFeature&typeNames=beleuchtung:beleuchtung&count=20000&outputFormat=application/json&srsName=EPSG:4326" -o l.json
-          python3 -c 'import json,collections; d=json.load(open("l.json")); print(len(d["features"])); c=collections.Counter(f["properties"].get("leuchtentyp") for f in d["features"]); [print(n,k) for k,n in c.most_common(40)]; print(collections.Counter(f["properties"].get("status") for f in d["features"])); print(collections.Counter(f["properties"].get("betriebsart") for f in d["features"]))'
-      - name: Zuerich
+          cd app && (npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &) && sleep 4
+          npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+          mkdir -p ../ui/shots && cp ../ui/shot.mjs ./shot.mjs && node shot.mjs ../ui/shots
+      - name: Hochladen
         run: |
-          for n in Oeffentliche_Beleuchtung_der_Stadt_Zuerich Statistische_Quartiere Stadtkreise; do
-            echo "== $n"; curl -sL "https://www.ogd.stadt-zuerich.ch/wfs/geoportal/$n?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=1.1.0" | grep -oE "<Name>[^<]+|<DefaultSRS>[^<]+|<OtherSRS>[^<]+" | head -8
-          done
-          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Statistische_Quartiere?format=geojson_link" -o q.json; head -c 900 q.json; echo
-          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Stadtkreise?format=geojson_link" -o k.json; head -c 600 k.json; echo
-          curl -sL "https://www.stadt-zuerich.ch/geodaten/download/Oeffentliche_Beleuchtung_der_Stadt_Zuerich?format=geojson_link" -o zl.json; ls -la zl.json; head -c 900 zl.json; echo
-          python3 -c 'import json,collections; d=json.load(open("zl.json")); print(len(d["features"])); print(collections.Counter(f["properties"].get("art_txt") or f["properties"].get("ART_TXT") for f in d["features"]).most_common(20))' || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ui/shots && git commit -qm "Screenshots" && git push
