@@ -41,11 +41,35 @@ const FEEDS = {
     lamps: () => JSON.parse(fs.readFileSync(path.join(RAW, 'berlin-leuchten.json'), 'utf8')),
     holidays: ['0101', '0308', '0501', '1003', '1031', '1224', '1225', '1226', '1231'],
   },
+  zuerich: {
+    // Fahrplan der ganzen Schweiz (opentransportdata.swiss / SKI+); wird auf Zürich zugeschnitten. Ersatz: Kopie bei der Mobility Database
+    url: 'https://data.opentransportdata.swiss/dataset/timetable-2026-gtfs2020/permalink',
+    fallback: 'https://files.mobilitydatabase.org/mdb-2898/latest.zip',
+    dir: 'gtfs-zuerich',
+    out: 'transit-zuerich.json',
+    source: 'opentransportdata.swiss (SKI+), Fahrplan Schweiz',
+    lat: 47.37,
+    lamps: () => {
+      const d = JSON.parse(fs.readFileSync(path.join(RAW, 'zuerich-leuchten.json'), 'utf8'));
+      return d.features
+        .map((f) => (f.geometry?.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry?.coordinates))
+        .filter(Boolean)
+        .map((c) => (c[0] > 40 && c[1] < 20 ? [c[1], c[0]] : [c[0], c[1]]));
+    },
+    holidays: ['0101', '0102', '0501', '0801', '1224', '1225', '1226', '1231'],
+  },
 };
 
 // Linienfarben für Berlin (BVG/S-Bahn, von Hand gewählt, falls das GTFS keine Farbe liefert)
 const BERLIN_COLORS = { U1: '7dad4c', U2: 'da421e', U3: '16683d', U4: 'f0d722', U5: '7e5330', U6: '8c6dab', U7: '528dba', U8: '224f86', U9: 'f3791d' };
 function routeColor(city, name, type, gtfsColor) {
+  if (city === 'zuerich') {
+    if (gtfsColor && /^[0-9a-f]{6}$/i.test(gtfsColor) && !['ffffff', '000000'].includes(gtfsColor.toLowerCase())) return gtfsColor.toLowerCase();
+    if (/^S\d/.test(name) || /^SN/.test(name)) return '1d1d1b';
+    if (/^N/.test(name)) return '1c1f3a';
+    if (type === 0 || type === 3) return '0f5aa6'; // Tram und Bus in Zürich-Blau
+    return null;
+  }
   if (city !== 'berlin') return null;
   if (BERLIN_COLORS[name]) return BERLIN_COLORS[name];
   if (gtfsColor && /^[0-9a-f]{6}$/i.test(gtfsColor) && gtfsColor.toLowerCase() !== 'ffffff') return gtfsColor.toLowerCase();
@@ -65,6 +89,7 @@ function baseType(t) {
   if (t >= 900 && t < 1000) return 0;
   if (t >= 1000 && t < 1100) return 4;
   if (t >= 1300 && t < 1400) return 6;
+  if (t >= 1400 && t < 1500) return 7;
   return 3;
 }
 
@@ -116,7 +141,11 @@ async function ensureGtfs(feed) {
   if (fs.existsSync(path.join(dir, 'stop_times.txt')) && !REFRESH) return dir;
   fs.mkdirSync(dir, { recursive: true });
   log('lade', feed.url);
-  const res = await fetch(feed.url);
+  let res = await fetch(feed.url);
+  if ((!res.ok || !/zip|octet/.test(res.headers.get('content-type') ?? '')) && feed.fallback) {
+    log('  Ersatzquelle', feed.fallback);
+    res = await fetch(feed.fallback);
+  }
   if (!res.ok) throw new Error('GTFS-Download fehlgeschlagen: ' + res.status);
   const zip = path.join(RAW, feed.dir + '.zip');
   fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
