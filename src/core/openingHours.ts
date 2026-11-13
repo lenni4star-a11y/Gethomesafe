@@ -10,6 +10,7 @@ const REGIONS: Record<string, { lat: number; lon: number; address: { country_cod
   frankfurt: { lat: 50.11, lon: 8.68, address: { country_code: 'de', state: 'Hessen' } },
   koeln: { lat: 50.94, lon: 6.96, address: { country_code: 'de', state: 'Nordrhein-Westfalen' } },
   muenchen: { lat: 48.14, lon: 11.58, address: { country_code: 'de', state: 'Bayern' } },
+  sanfrancisco: { lat: 37.76, lon: -122.44, address: { country_code: 'us', state: 'California' } },
 };
 let region = 'wien';
 

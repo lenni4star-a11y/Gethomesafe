@@ -56,5 +56,9 @@
   "muenchen": {
     "_hinweis": "München: ganze Stadt (25 Stadtbezirke aus OpenStreetMap).",
     "teile": "alle"
+  },
+  "sanfrancisco": {
+    "_hinweis": "San Francisco: ganze Stadt (41 Analysis Neighborhoods von DataSF).",
+    "teile": "alle"
   }
 }

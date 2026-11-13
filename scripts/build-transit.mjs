@@ -80,6 +80,17 @@ const FEEDS = {
     lamps: () => [],
     holidays: ['0101', '0501', '1003', '1101', '1224', '1225', '1226', '1231'],
   },
+  sanfrancisco: {
+    // Muni (SFMTA), inkl. Owl-Nachtlinien; BART fährt nachts nicht
+    url: 'https://muni-gtfs.apps.sfmta.com/data/muni_gtfs-current.zip',
+    fallback: 'https://gtfs.sfmta.com/transitdata/google_transit.zip',
+    dir: 'gtfs-sanfrancisco',
+    out: 'transit-sanfrancisco.json',
+    source: 'San Francisco Municipal Transportation Agency (SFMTA), GTFS',
+    lat: 37.76,
+    lamps: () => [],
+    holidays: ['0101', '0704', '1111', '1225'],
+  },
   frankfurt: {
     // Fahrplan des Nahverkehrs in ganz Deutschland (DELFI e. V. über gtfs.de, CC BY 4.0), auf Frankfurt zugeschnitten
     url: 'https://download.gtfs.de/germany/nv_free/latest.zip',

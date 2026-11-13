@@ -81,6 +81,14 @@ export function RidePanel({ city, from, to, toLabel, dark, toHome = false }: Pan
     uber.searchParams.set('dropoff[nickname]', toLabel);
   }
   const taxis = TAXI[city] ?? [];
+  const us = city === 'sanfrancisco';
+  // Lyft: universeller Link mit Ziel (nie mit Zuhause)
+  const lyft = new URL('https://lyft.com/ride');
+  lyft.searchParams.set('id', 'lyft');
+  if (!toHome) {
+    lyft.searchParams.set('destination[latitude]', String(to[1]));
+    lyft.searchParams.set('destination[longitude]', String(to[0]));
+  }
   return (
     <div className="mode-panel">
       <p className="mode-estimate">
@@ -90,12 +98,20 @@ export function RidePanel({ city, from, to, toLabel, dark, toHome = false }: Pan
         <a className="btn" href={uber.toString()} target="_blank" rel="noreferrer">
           Uber öffnen <small>{toHome ? 'Zuhause in der App eingeben' : 'Ziel wird übergeben'}</small>
         </a>
-        <a className="btn" href="https://bolt.eu/" target="_blank" rel="noreferrer">
-          Bolt öffnen <small>Ziel in der App eingeben</small>
-        </a>
-        <a className="btn" href="https://www.free-now.com/" target="_blank" rel="noreferrer">
-          FreeNow öffnen <small>Taxi per App</small>
-        </a>
+        {us ? (
+          <a className="btn" href={lyft.toString()} target="_blank" rel="noreferrer">
+            Lyft öffnen <small>{toHome ? 'Zuhause in der App eingeben' : 'Ziel wird übergeben'}</small>
+          </a>
+        ) : (
+          <>
+            <a className="btn" href="https://bolt.eu/" target="_blank" rel="noreferrer">
+              Bolt öffnen <small>Ziel in der App eingeben</small>
+            </a>
+            <a className="btn" href="https://www.free-now.com/" target="_blank" rel="noreferrer">
+              FreeNow öffnen <small>Taxi per App</small>
+            </a>
+          </>
+        )}
         {taxis.map((t) => (
           <a key={t.dial} className="btn" href={`tel:${t.dial}`}>
             Taxi rufen: {t.name} <small>{t.number}</small>
@@ -108,7 +124,7 @@ export function RidePanel({ city, from, to, toLabel, dark, toHome = false }: Pan
         {dark && <li>Nachts hinten sitzen und dein Ziel nicht laut nennen, wenn du dich unwohl fühlst.</li>}
       </ul>
       <p className="fineprint">
-        {toHome ? 'Dein Zuhause geben wir an keinen Fahrdienst weiter.' : 'Uber bekommt dein Ziel erst, wenn du auf „Uber öffnen“ tippst.'} Preise zeigt die jeweilige App.
+        {toHome ? 'Dein Zuhause geben wir an keinen Fahrdienst weiter.' : `${us ? 'Uber und Lyft bekommen' : 'Uber bekommt'} dein Ziel erst, wenn du auf „öffnen“ tippst.`} Preise zeigt die jeweilige App.
         {TAXI_SOURCE[city] && (
           <>
             {' '}
