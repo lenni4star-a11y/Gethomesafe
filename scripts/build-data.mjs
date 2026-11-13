@@ -251,6 +251,27 @@ async function osmDistricts(id) {
     log(`  ${c.name}: ${out.length} Teile auf Ebene ${level}`);
     if (out.length >= 5) break;
   }
+  // Lücken füllen: Teile der anderen Ebene, deren Mitte in keinem gefundenen Teil liegt
+  // (in Frankfurt sind z. B. Harheim oder Bergen-Enkheim nur als Ortsbezirk eingetragen)
+  const other = c.level === 10 ? 9 : 10;
+  try {
+    const bb = cityRing.reduce((a, p) => [Math.min(a[0], p[1]), Math.min(a[1], p[0]), Math.max(a[2], p[1]), Math.max(a[3], p[0])], [90, 180, -90, -180]);
+    const d = await overpass(`[out:json][timeout:300];rel["boundary"="administrative"]["admin_level"="${other}"](${bb.map((v) => v.toFixed(4)).join(',')});out geom;`, `${id}-teile-${other}.json`);
+    const center = (ring) => ring.reduce((a, p) => [a[0] + p[0] / ring.length, a[1] + p[1] / ring.length], [0, 0]);
+    let added = 0;
+    for (const r of d.elements) {
+      if (r.type !== 'relation' || !r.tags?.name) continue;
+      const ring = relationRings(r)[0];
+      if (!ring) continue;
+      const m = center(ring);
+      if (!pointInRing(m, cityRing) || out.some((t) => pointInRing(m, t.ring)) || out.some((t) => t.name === r.tags.name)) continue;
+      out.push({ name: r.tags.name, ring });
+      added++;
+    }
+    if (added) log(`  ${c.name}: ${added} Lücken mit Ebene ${other} gefüllt`);
+  } catch (e) {
+    log('  Lücken nicht gefüllt:', e.message);
+  }
   return out.sort((a, b) => a.name.localeCompare(b.name, 'de')).map((t, i) => ({ nr: i + 1, name: t.name, poly: [t.ring] }));
 }
 
