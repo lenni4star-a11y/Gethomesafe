@@ -44,5 +44,17 @@
   "zuerich": {
     "_hinweis": "Zürich: ganze Stadt (34 statistische Quartiere, Stadt Zürich Open Data).",
     "quartiere": "alle"
+  },
+  "frankfurt": {
+    "_hinweis": "Frankfurt am Main: ganze Stadt (Stadtteile aus OpenStreetMap). Statt 'alle' auch eine Liste von Nummern möglich.",
+    "teile": "alle"
+  },
+  "koeln": {
+    "_hinweis": "Köln: ganze Stadt (86 Stadtteile aus OpenStreetMap).",
+    "teile": "alle"
+  },
+  "muenchen": {
+    "_hinweis": "München: ganze Stadt (25 Stadtbezirke aus OpenStreetMap).",
+    "teile": "alle"
   }
 }

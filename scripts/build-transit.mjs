@@ -58,6 +58,39 @@ const FEEDS = {
     },
     holidays: ['0101', '0102', '0501', '0801', '1224', '1225', '1226', '1231'],
   },
+  muenchen: {
+    // MVV Gesamt-Soll-Fahrplandaten (CC BY 4.0); Ersatz: Kopie bei der Mobility Database
+    url: 'https://www.mvv-muenchen.de/fileadmin/mediapool/developer/opendata/gesamt_gtfs.zip',
+    fallback: 'https://www.mvv-muenchen.de/fileadmin/mediapool/02-Fahrplanauskunft/03-Downloads/openData/mvv_gtfs.zip',
+    dir: 'gtfs-muenchen',
+    out: 'transit-muenchen.json',
+    source: 'Münchner Verkehrs- und Tarifverbund (MVV), CC BY 4.0',
+    lat: 48.14,
+    lamps: () => [],
+    holidays: ['0101', '0106', '0501', '0815', '1003', '1101', '1224', '1225', '1226', '1231'],
+  },
+  koeln: {
+    // Verkehrsverbund Rhein-Sieg (VRS) inkl. S-Bahn und Regionalzüge (CC BY 4.0)
+    url: 'http://download.vrsinfo.de/gtfs/GTFS_VRS_mit_SPNV.zip',
+    fallback: 'http://download.vrsinfo.de/gtfs/google_transit.zip',
+    dir: 'gtfs-koeln',
+    out: 'transit-koeln.json',
+    source: 'Verkehrsverbund Rhein-Sieg (VRS), CC BY 4.0',
+    lat: 50.94,
+    lamps: () => [],
+    holidays: ['0101', '0501', '1003', '1101', '1224', '1225', '1226', '1231'],
+  },
+  frankfurt: {
+    // Fahrplan des Nahverkehrs in ganz Deutschland (DELFI e. V. über gtfs.de, CC BY 4.0), auf Frankfurt zugeschnitten
+    url: 'https://download.gtfs.de/germany/nv_free/latest.zip',
+    fallback: 'https://files.mobilitydatabase.org/mdb-1090/latest.zip',
+    dir: 'gtfs-frankfurt',
+    out: 'transit-frankfurt.json',
+    source: 'DELFI e. V. / gtfs.de, Nahverkehr Deutschland, CC BY 4.0',
+    lat: 50.11,
+    lamps: () => [],
+    holidays: ['0101', '0501', '1003', '1224', '1225', '1226', '1231'],
+  },
 };
 
 // Linienfarben für Berlin (BVG/S-Bahn, von Hand gewählt, falls das GTFS keine Farbe liefert)
@@ -70,7 +103,7 @@ function routeColor(city, name, type, gtfsColor) {
     if (type === 0 || type === 3) return '0f5aa6'; // Tram und Bus in Zürich-Blau
     return null;
   }
-  if (city !== 'berlin') return null;
+  if (city !== 'berlin') return city !== 'wien' && gtfsColor && /^[0-9a-f]{6}$/i.test(gtfsColor) && !['ffffff', '000000'].includes(gtfsColor.toLowerCase()) ? gtfsColor.toLowerCase() : null;
   if (BERLIN_COLORS[name]) return BERLIN_COLORS[name];
   if (gtfsColor && /^[0-9a-f]{6}$/i.test(gtfsColor) && gtfsColor.toLowerCase() !== 'ffffff') return gtfsColor.toLowerCase();
   if (/^S\d/.test(name)) return '008d4f';

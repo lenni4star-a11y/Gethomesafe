@@ -7,6 +7,9 @@ const REGIONS: Record<string, { lat: number; lon: number; address: { country_cod
   linz: { lat: 48.3, lon: 14.29, address: { country_code: 'at', state: 'Oberösterreich' } },
   berlin: { lat: 52.52, lon: 13.4, address: { country_code: 'de', state: 'Berlin' } },
   zuerich: { lat: 47.37, lon: 8.54, address: { country_code: 'ch', state: 'Zürich' } },
+  frankfurt: { lat: 50.11, lon: 8.68, address: { country_code: 'de', state: 'Hessen' } },
+  koeln: { lat: 50.94, lon: 6.96, address: { country_code: 'de', state: 'Nordrhein-Westfalen' } },
+  muenchen: { lat: 48.14, lon: 11.58, address: { country_code: 'de', state: 'Bayern' } },
 };
 let region = 'wien';
 

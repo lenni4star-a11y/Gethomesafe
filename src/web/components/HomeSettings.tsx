@@ -36,12 +36,10 @@ export function HomeSettings({ home, onHomeChange, favorites, onFavoritesChange,
           Zuhause löschen
         </button>
       )}
-      <p className="fineprint">
-        Deine Heimadresse bleibt nur auf diesem Gerät. Sie kommt nie in Bewertungen, auf einen Server oder in Nachrichten an Kontakte – die bekommen nur deinen aktuellen Standort.
-      </p>
+      <p className="fineprint">Bleibt nur auf diesem Gerät.</p>
 
       <h3>Lieblingsorte</h3>
-      {favorites.length === 0 && <p className="muted">Noch keine. Bei einem Ziel auf „☆ Merken“ tippen.</p>}
+      {favorites.length === 0 && <p className="muted">Noch keine. Bei einem Ziel auf „Merken“ tippen.</p>}
       <ul className="contact-list">
         {favorites.map((f, i) => (
           <li key={i}>

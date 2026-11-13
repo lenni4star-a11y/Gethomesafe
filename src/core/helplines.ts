@@ -19,7 +19,7 @@ export interface Helpline {
 }
 
 /** Land der Stadt (für Notrufnummern und landesweite Hilfsstellen) */
-export const COUNTRY_OF: Record<string, string> = { wien: 'at', linz: 'at', berlin: 'de', zuerich: 'ch' };
+export const COUNTRY_OF: Record<string, string> = { wien: 'at', linz: 'at', berlin: 'de', zuerich: 'ch', frankfurt: 'de', koeln: 'de', muenchen: 'de' };
 
 /** Notrufnummern je Land. 112 geht in ganz Europa. */
 export const EMERGENCY_BY_COUNTRY: Record<string, { label: string; number: string }[]> = {

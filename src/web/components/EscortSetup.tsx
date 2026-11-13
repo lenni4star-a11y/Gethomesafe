@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { Contact } from '../../core/contacts';
 import type { EscortSettings } from '../../core/settings';
-import { canVibrate, hashPin, isIOS, keepScreenOn, unlockAudio, vibrate } from '../signals';
+import { canVibrate, isIOS, keepScreenOn, unlockAudio, vibrate } from '../signals';
 import { SoundCheck } from './SoundCheck';
 import { ContactsEditor } from './ContactsEditor';
-import { PinPad } from './PinPad';
+import { PinSetupFlow } from './PinSettings';
 import { Modal } from './Modal';
 
 interface Props {
@@ -13,9 +13,12 @@ interface Props {
   onContactsChange: (c: Contact[]) => void;
   settings: EscortSettings;
   onSettingsChange: (s: EscortSettings) => void;
-  onStart: (pin: string, destination: string, contactIds: string[]) => void;
+  onStart: (pinHash: string, destination: string, contactIds: string[]) => void;
   onClose: () => void;
-  /** Prüfwert der Täuschungs-PIN (die Begleitungs-PIN muss sich davon unterscheiden) */
+  /** Prüfwert der App-PIN; fehlt sie, wird sie hier einmalig festgelegt */
+  appPinHash: string | null;
+  onAppPin: (hash: string) => void;
+  /** Prüfwert der Täuschungs-PIN (die App-PIN muss sich davon unterscheiden) */
   decoyPinHash?: string | null;
 }
 
@@ -68,10 +71,12 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
         <span>
           <b>Rückfrage bei Abweichung oder langem Stehenbleiben</b>
           <br />
-          <span className="muted">Nur wenn eine Route geplant ist bzw. der Standort verfügbar ist. An Haltestellen wird Warten nicht gezählt.</span>
+          <span className="muted">Warten an Haltestellen zählt nicht.</span>
         </span>
       </label>
       {(settings.watchRoute ?? true) && (
+        <details className="more">
+          <summary>Feineinstellungen</summary>
         <div className="watch-grid">
           <label className="field">
             <span>Abweichung ab</span>
@@ -114,6 +119,7 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
             </select>
           </label>
         </div>
+        </details>
       )}
       <label className="field">
         <span>Anrufversuche, bevor Kontakte benachrichtigt werden</span>
@@ -130,23 +136,20 @@ export function EscortSettingsFields({ settings, onChange }: { settings: EscortS
 }
 
 /** Begleitung starten: Ziel, Kontakte, Modus, PIN */
-export function EscortSetup({ destination, contacts, onContactsChange, settings, onSettingsChange, onStart, onClose, decoyPinHash }: Props) {
+export function EscortSetup({ destination, contacts, onContactsChange, settings, onSettingsChange, onStart, onClose, appPinHash, onAppPin, decoyPinHash }: Props) {
   const [dest, setDest] = useState(destination);
   const [selected, setSelected] = useState<string[]>(contacts.map((c) => c.id));
-  const [pin, setPin] = useState('');
-  const [pinStep, setPinStep] = useState<'first' | 'repeat' | null>(null);
-  const [firstPin, setFirstPin] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
+  const [setPin, setSetPin] = useState(false);
   const [editContacts, setEditContacts] = useState(contacts.length === 0);
   const [error, setError] = useState<string | null>(null);
 
   const start = () => {
-    if (pin.length < 4) return setError('Bitte zuerst eine PIN festlegen.');
+    if (!appPinHash) return setSetPin(true);
     // Direkt im Tipp: Ton, Sprache, Vibration und wacher Bildschirm freischalten
     unlockAudio();
     vibrate(150);
     void keepScreenOn();
-    onStart(pin, dest.trim() || 'nach Hause', selected.filter((id) => contacts.some((c) => c.id === id)));
+    onStart(appPinHash, dest.trim() || 'nach Hause', selected.filter((id) => contacts.some((c) => c.id === id)));
   };
 
   return (
@@ -200,11 +203,17 @@ export function EscortSetup({ destination, contacts, onContactsChange, settings,
       </section>
 
       <section className="settings-section">
-        <h3>PIN zum Beenden</h3>
-        <p className="fineprint">Mit dieser PIN beendest du die Begleitung oder brichst einen Fehlalarm ab. So kann das niemand anderes einfach tun.</p>
-        <button type="button" className="btn" onClick={() => (setPinError(null), setPinStep('first'))}>
-          {pin ? '✓ PIN festgelegt · ändern' : 'PIN festlegen'}
-        </button>
+        <h3>PIN</h3>
+        {appPinHash ? (
+          <p className="fineprint">Beenden mit deiner PIN. Ändern in den Einstellungen.</p>
+        ) : (
+          <>
+            <p className="fineprint">Einmal festlegen, gilt dann immer. Damit beendest du die Begleitung.</p>
+            <button type="button" className="btn" onClick={() => setSetPin(true)}>
+              PIN festlegen
+            </button>
+          </>
+        )}
       </section>
 
       <section className="settings-section">
@@ -227,30 +236,16 @@ export function EscortSetup({ destination, contacts, onContactsChange, settings,
       </div>
 
       {error && <p className="message">{error}</p>}
-      {pinStep && (
-        <PinPad
-          title={pinStep === 'first' ? 'PIN festlegen' : 'PIN wiederholen'}
-          text={pinStep === 'first' ? 'Mindestens 4 Ziffern. Damit beendest du die Begleitung.' : 'Bitte gib die PIN noch einmal ein.'}
-          confirmLabel={pinStep === 'first' ? 'Weiter' : 'Speichern'}
-          error={pinError}
-          onCancel={() => setPinStep(null)}
-          onSubmit={async (p) => {
-            if (pinStep === 'first' && decoyPinHash && (await hashPin(p)) === decoyPinHash) {
-              setPinError('Das ist deine Täuschungs-PIN. Bitte wähle eine andere PIN für die Begleitung.');
-              return;
-            }
-            if (pinStep === 'first') {
-              setFirstPin(p);
-              setPinError(null);
-              setPinStep('repeat');
-            } else if (p === firstPin) {
-              setPin(p);
-              setError(null);
-              setPinStep(null);
-            } else {
-              setPinError('Die PINs stimmen nicht überein. Bitte neu festlegen.');
-              setPinStep('first');
-            }
+      {setPin && (
+        <PinSetupFlow
+          title="PIN festlegen"
+          forbiddenHash={decoyPinHash}
+          forbiddenMessage="Das ist deine Täuschungs-PIN. Bitte eine andere."
+          onCancel={() => setSetPin(false)}
+          onDone={(h) => {
+            onAppPin(h);
+            setSetPin(false);
+            setError(null);
           }}
         />
       )}

@@ -19,7 +19,9 @@ import { ContactActions, EmergencyMenu } from './components/EmergencyMenu';
 import { EscortSettingsFields, EscortSetup } from './components/EscortSetup';
 import { EscortView } from './components/EscortView';
 import { HomeSettings } from './components/HomeSettings';
-import { DecoyPinSettings } from './components/DecoyPinSettings';
+import { PinSettings } from './components/PinSettings';
+import { ContactsEditor } from './components/ContactsEditor';
+import { SoundCheck } from './components/SoundCheck';
 import { triggerSilentAlarm } from './silentAlarm';
 import { Onboarding } from './components/Onboarding';
 import { PrivacyPage } from './components/PrivacyPage';
@@ -130,6 +132,25 @@ export function App() {
   // hell/dunkel für die Mitte der gewählten Stadt (Berlin und Wien unterscheiden sich um bis zu eine halbe Stunde)
   const dark = isDark(time, (cityInfo.bbox[1] + cityInfo.bbox[3]) / 2, (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2);
 
+  // Licht-Ansicht: nachts zeigt die Karte, welche Wege laut Daten beleuchtet sind
+  const showLights = dark && settings.nightLights !== false && !!planner;
+  const lightSource = useMemo(
+    () =>
+      showLights && planner
+        ? async (box: [number, number, number, number]) => {
+            await planner.ensureDistricts(
+              [
+                [box[0], box[1]],
+                [box[2], box[3]],
+              ],
+              0,
+            );
+            return planner.graph.litLines(box);
+          }
+        : null,
+    [showLights, planner],
+  );
+
   useEffect(() => {
     map.current?.setPoints(start?.coords ?? null, end?.coords ?? null);
   }, [start, end]);
@@ -169,7 +190,7 @@ export function App() {
     setBusy(true);
     setMessage(null);
     planner
-      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, crimeData: settings.crimeData, ratings })
+      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings })
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
@@ -191,7 +212,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime, settings.parkAvoidance, settings.crimeData, ratings, city]);
+  }, [planner, start, end, customTime, settings.parkAvoidance, ratings, city]);
 
   // Bewertungen auf der Karte, gefiltert nach Wochentag und Uhrzeit
   const ratingTime = customTime ?? new Date();
@@ -352,7 +373,7 @@ export function App() {
 
   return (
     <div className="app">
-      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} />
+      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} lightSource={lightSource} />
 
       <header className="topbar">
         <Wordmark />
@@ -442,7 +463,7 @@ export function App() {
           onReroute={async () => {
             const s = escort.session;
             if (!planner || !s?.destCoords || !escort.lastPos) return;
-            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, crimeData: settings.crimeData, ratings });
+            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings });
             if (!res) return;
             setPlan(res);
             setSelected('safest');
@@ -507,7 +528,7 @@ export function App() {
           </div>
           {!home && !homePromptDone && onboardingDone && (
             <div className="notice home-prompt">
-              <b>Zuhause festlegen?</b> Dann planst du mit einem Tipp den sichersten Heimweg. Bleibt nur auf deinem Gerät.
+              <b>Zuhause festlegen?</b> Dann geht der Heimweg mit einem Tipp.
               <div className="tp-row">
                 <button type="button" className="chip active" onClick={() => (setHomePromptDone(true), setShowSettings(true))}>
                   Festlegen
@@ -520,7 +541,6 @@ export function App() {
           )}
 
           <div className="time-row">
-            <span className={`daynight ${dark ? 'night' : 'day'}`}>{dark ? 'dunkel' : 'hell'}</span>
             <button type="button" className="link-btn time-toggle" onClick={() => setShowTime((v) => !v)} aria-expanded={showTime}>
               {customTime ? `Losgehen: ${formatTime(customTime)}` : 'Losgehen: jetzt'} ▾
             </button>
@@ -662,18 +682,12 @@ export function App() {
             </>
           )}
 
-          {!plan && !message && !busy && (
-            <p className="intro">
-              Wohin willst du? Danach vergleichst du Öffis, zu Fuß, Taxi und Roller, mit einer Einschätzung, wie angenehm sich der Weg anfühlt.
-            </p>
-          )}
-
           <button type="button" className="btn escort-start" onClick={() => setShowEscortSetup(true)}>
             <Icon name="company" size={20} /> Begleitung starten
           </button>
 
 
-              <p className="disclaimer">Prototyp: Die Bewertung beruht auf offenen Daten und kann Lücken haben. Im Notfall: {emergencyText(cityInfo.id)}.</p>
+              <p className="disclaimer">Prototyp · Notfall: {emergencyText(cityInfo.id)}</p>
             </>
           )}
         </section>
@@ -694,6 +708,7 @@ export function App() {
 
       {showSettings && (
         <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setShowSettings(false)}>
+          <h2 className="settings-group">Meine Orte</h2>
           <HomeSettings
             home={home}
             onHomeChange={setHome}
@@ -705,8 +720,28 @@ export function App() {
             onPickOnMap={() => (setShowSettings(false), setPick('home'))}
             onLocate={() => locate((p) => setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }))}
           />
+          <h2 className="settings-group">Notfallkontakte</h2>
           <section className="settings-section">
-            <h3>Hilfe und Datenschutz</h3>
+            <ContactsEditor contacts={contacts} onChange={setContacts} />
+          </section>
+          <h2 className="settings-group">Begleitung</h2>
+          <section className="settings-section">
+            <h3>Nachfragen</h3>
+            <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
+          </section>
+          <PinSettings
+            appPinHash={settings.appPinHash ?? null}
+            decoyPinHash={settings.decoyPinHash}
+            locked={escort.session !== null}
+            onAppPin={(h) => setSettings({ ...settings, appPinHash: h })}
+            onDecoyPin={(h) => setSettings({ ...settings, decoyPinHash: h })}
+          />
+          <section className="settings-section">
+            <h3>Ton testen</h3>
+            <SoundCheck voiceMode={settings.voice} />
+          </section>
+          <h2 className="settings-group">Hilfe und Datenschutz</h2>
+          <section className="settings-section">
             <div className="tp-row">
               <button type="button" className="chip" onClick={() => (setShowSettings(false), setShowOnboarding(true))}>
                 Einführung ansehen
@@ -720,11 +755,6 @@ export function App() {
             </button>
             <p className="fineprint">Löscht Zuhause, Lieblingsorte, Kontakte, Bewertungen und Einstellungen auf diesem Gerät. Das kann nicht rückgängig gemacht werden.</p>
           </section>
-          <section className="settings-section">
-            <h3>Begleitmodus</h3>
-            <EscortSettingsFields settings={settings.escort} onChange={(e) => setSettings({ ...settings, escort: e })} />
-          </section>
-          <DecoyPinSettings decoyPinHash={settings.decoyPinHash} onChange={(h) => setSettings({ ...settings, decoyPinHash: h })} />
         </SettingsPanel>
       )}
 
@@ -765,11 +795,13 @@ export function App() {
           settings={settings.escort}
           onSettingsChange={(e) => setSettings({ ...settings, escort: e })}
           onClose={() => setShowEscortSetup(false)}
+          appPinHash={settings.appPinHash ?? null}
+          onAppPin={(h) => setSettings({ ...settings, appPinHash: h })}
           decoyPinHash={settings.decoyPinHash}
-          onStart={(pin, dest, ids) => {
+          onStart={(pinHash, dest, ids) => {
             setShowEscortSetup(false);
             const destCoords = end?.coords ?? (dest === 'Zuhause' ? home?.coords : undefined);
-            escort.start(settings.escort, pin, dest, ids, chosen?.coords, destCoords, settings.decoyPinHash);
+            escort.start(settings.escort, pinHash, dest, ids, chosen?.coords, destCoords, settings.decoyPinHash);
             setEscortCompact(true);
           }}
         />

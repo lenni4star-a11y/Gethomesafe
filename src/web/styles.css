@@ -856,6 +856,18 @@ input {
   padding: 8px 0;
 }
 
+.settings-group {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 22px 0 2px;
+}
+.settings-group:first-of-type {
+  margin-top: 4px;
+}
+
 .settings-section h3 {
   font-size: 1rem;
   margin: 8px 0;
@@ -2943,4 +2955,14 @@ a.btn {
 }
 .maplibregl-ctrl-top-right .maplibregl-ctrl-attrib a {
   color: inherit;
+}
+.settings-group + .settings-section {
+  border-top: none;
+}
+
+details.more summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 6px 0;
 }

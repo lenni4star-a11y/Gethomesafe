@@ -214,8 +214,8 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   if (tunnels) reasons.push(tunnels === 1 ? '1 Unterführung' : `${tunnels} Unterführungen`);
   if (mainLen / netLen >= 0.5) reasons.push('überwiegend Hauptstraßen');
   if (shopLen / netLen >= 0.3) reasons.push(`${pct(shopLen / netLen)} % Geschäftsstraße (Schaufenster, Eingänge)`);
-  if (kboLen >= 50) reasons.push(`${Math.round(kboLen / 10) * 10} m durch einen kriminalitätsbelasteten Ort (laut Polizei Berlin, kleiner Abzug)`);
-  if (atlasLen / netLen >= 0.2) reasons.push(`${pct(atlasLen / netLen)} % in Gegenden mit mehr Straßenraub und Körperverletzung (Kriminalitätsatlas, kleiner Abzug)`);
+  if (kboLen >= 50) reasons.push(`${Math.round(kboLen / 10) * 10} m durch einen polizeilich festgelegten Brennpunkt`);
+  if (atlasLen / netLen >= 0.2) reasons.push(`${pct(atlasLen / netLen)} % in Gegenden mit mehr Gewalttaten (Polizeistatistik)`);
 
   return {
     mode: route.mode,

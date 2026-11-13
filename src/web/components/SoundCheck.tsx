@@ -47,13 +47,13 @@ export function SoundCheck({ voiceMode }: { voiceMode: VoiceMode }) {
     <div className="sound-check">
       <div className="tp-row">
         <button type="button" className="chip" onClick={testSound}>
-          🔔 Testton
+          Testton
         </button>
         <button type="button" className="chip" onClick={testVibration}>
-          📳 Vibration
+          Vibration
         </button>
         <button type="button" className="chip" onClick={testVoice}>
-          🗣 Stimme
+          Stimme
         </button>
       </div>
       {result && (

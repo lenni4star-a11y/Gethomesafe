@@ -33,7 +33,11 @@ export interface Settings {
   voice: 'auto' | 'device' | 'recording';
   /** Zuhause auf der Karte als neutrales Symbol zeigen */
   showHomeOnMap: boolean;
+  /** nachts beleuchtete Wege auf der Karte zeigen */
+  nightLights: boolean;
   /** Prüfwert der Täuschungs-PIN (nie im Klartext), null = keine */
+  /** eine PIN für die ganze App (nur als Prüfwert) */
+  appPinHash: string | null;
   decoyPinHash: string | null;
   /** amtliche Kriminalitätsdaten (Berlin: Kriminalitätsatlas, kriminalitätsbelastete Orte) als kleinen Abzug berücksichtigen */
   crimeData: boolean;
@@ -45,6 +49,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mapillaryToken: '',
   voice: 'auto',
   showHomeOnMap: true,
+  nightLights: true,
+  appPinHash: null,
   decoyPinHash: null,
   crimeData: true,
   escort: { mode: 'interval', intervalSec: 60, responseSec: 20, callAttempts: 1, watchRoute: true, offRouteMeters: 75, offRouteSec: 30, stillMinutes: 3, arrivalMeters: 50 },

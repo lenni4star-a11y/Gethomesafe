@@ -106,6 +106,24 @@ export class Graph {
     return this.osmIds[node];
   }
 
+  /**
+   * Beleuchtete Wegstücke in einem Ausschnitt [West, Süd, Ost, Nord], für die Licht-Ansicht nachts.
+   * Stärke 0–1: Anteil der Strecke mit Leuchten der Stadt; bei OpenStreetMap „beleuchtet“ 0,8, bei Fotos 0,5.
+   */
+  litLines(box: [number, number, number, number], max = 20000): { coords: LngLat[]; strength: number }[] {
+    const [w, s, e, n] = box;
+    const out: { coords: LngLat[]; strength: number }[] = [];
+    for (const edge of this.edges) {
+      if (edge.lit !== 'yes') continue;
+      const c = edge.coords;
+      if (!c.some((p) => p[0] >= w && p[0] <= e && p[1] >= s && p[1] <= n)) continue;
+      const strength = edge.litSource === 'stadt' ? Math.max(0.4, edge.lampCoverage) : edge.litSource === 'osm' ? Math.max(0.8, edge.lampCoverage) : 0.5;
+      out.push({ coords: c, strength });
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+
   /** Kanten mit mindestens einem Endpunkt im Umkreis (grobe Vorauswahl) */
   edgesNear(p: LngLat, meters: number): Edge[] {
     const out = new Set<Edge>();
