@@ -104,7 +104,7 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
       <section className="sos-section sos-emergency" aria-labelledby="sos-notruf">
         <h3 id="sos-notruf">Notruf</h3>
         <EmergencyButtons />
-        <p className="fineprint">Der Anruf startet direkt über dein Telefon. 112 funktioniert auch ohne SIM-PIN.</p>
+        <p className="fineprint">Der Anruf startet direkt über dein Telefon.{COUNTRY_OF[city] !== 'us' && ' 112 funktioniert auch ohne SIM-PIN.'}</p>
         <SilentCallHint />
       </section>
 
@@ -132,6 +132,8 @@ export function EmergencyMenu({ contacts, onContactsChange, onClose, onFakeCall,
               ? 'Nummern für Deutschland geprüft im November 2026 auf offiziellen Seiten.'
               : COUNTRY_OF[city] === 'ch'
                 ? 'Nummern für die Schweiz geprüft im November 2026 auf offiziellen Seiten.'
+                : COUNTRY_OF[city] === 'us'
+                  ? 'Nummern für San Francisco geprüft im November 2026 auf sf.gov.'
               : 'Nummern geprüft im Oktober 2026 auf offiziellen Seiten. Ein eigenes Heimwegtelefon für Wien haben wir nicht gefunden.'}</p>
       </section>
 

@@ -19,7 +19,7 @@ export interface Helpline {
 }
 
 /** Land der Stadt (für Notrufnummern und landesweite Hilfsstellen) */
-export const COUNTRY_OF: Record<string, string> = { wien: 'at', linz: 'at', berlin: 'de', zuerich: 'ch', frankfurt: 'de', koeln: 'de', muenchen: 'de' };
+export const COUNTRY_OF: Record<string, string> = { wien: 'at', linz: 'at', berlin: 'de', zuerich: 'ch', frankfurt: 'de', koeln: 'de', muenchen: 'de', sanfrancisco: 'us' };
 
 /** Notrufnummern je Land. 112 geht in ganz Europa. */
 export const EMERGENCY_BY_COUNTRY: Record<string, { label: string; number: string }[]> = {
@@ -37,6 +37,8 @@ export const EMERGENCY_BY_COUNTRY: Record<string, { label: string; number: strin
     { label: 'Sanität', number: '144' },
     { label: 'Euronotruf', number: '112' },
   ],
+  // USA: eine Nummer für alles
+  us: [{ label: 'Polizei, Rettung, Feuerwehr', number: '911' }],
 };
 export const emergencyFor = (city: string) => EMERGENCY_BY_COUNTRY[COUNTRY_OF[city] ?? 'at'] ?? EMERGENCY_BY_COUNTRY.at;
 /** für ältere Stellen im Code: Österreich */
@@ -45,8 +47,15 @@ export const EMERGENCY = EMERGENCY_BY_COUNTRY.at;
 /** Kurzform für Hinweise: „133 (Polizei), 144 (Rettung) oder 112“ bzw. „110 (Polizei) oder 112“ */
 export function emergencyText(city: string): string {
   const e = emergencyFor(city);
+  if (!e.some((x) => x.number === '112')) return e.map((x) => x.number).join(', ');
   const parts = e.filter((x) => x.number !== '112').map((x) => `${x.number} (${x.label})`);
   return `${parts.join(', ')} oder 112`;
+}
+
+/** die eine Nummer für den großen Notruf-Knopf: 112 in Europa, 911 in den USA */
+export function mainEmergency(city: string): string {
+  const e = emergencyFor(city);
+  return e.some((x) => x.number === '112') ? '112' : e[0].number;
 }
 
 export const HELPLINES: Helpline[] = [
@@ -244,6 +253,31 @@ HELPLINES.push(
     description: 'Für Kinder und Jugendliche.',
     source: 'https://www.bag.admin.ch/de/hilfsangebote-zur-psychischen-gesundheit',
     country: 'ch',
+  },
+);
+
+// USA / San Francisco (geprüft im November 2026 auf sf.gov und mass.gov)
+HELPLINES.push(
+  {
+    name: 'SF Women Against Rape (SFWAR)',
+    number: '415-647-7273',
+    dial: '+14156477273',
+    allDay: true,
+    hours: 'rund um die Uhr',
+    description: 'Für alle, die sexualisierte Gewalt erlebt haben, auch Angehörige. Auf Englisch und Spanisch.',
+    source: 'https://www.sf.gov/help-for-sexual-assault-victims-in-san-francisco',
+    region: 'sanfrancisco',
+    country: 'us',
+  },
+  {
+    name: '988 Suicide & Crisis Lifeline',
+    number: '988',
+    dial: '988',
+    allDay: true,
+    hours: 'rund um die Uhr, Anruf oder SMS',
+    description: 'Wenn es dir sehr schlecht geht oder du jemanden zum Reden brauchst.',
+    source: 'https://www.mass.gov/service-details/suicide-prevention-crisis-hotlines',
+    country: 'us',
   },
 );
 

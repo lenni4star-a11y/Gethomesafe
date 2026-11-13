@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { keepScreenOn, loop, vibrate } from '../signals';
 
 /** Lauter Alarm: Sirene in Schleife, blinkender Bildschirm, Vibration (Android) */
-export function AlarmScreen({ onStop }: { onStop: () => void }) {
+export function AlarmScreen({ onStop, number = '112' }: { onStop: () => void; number?: string }) {
   useEffect(() => {
     const stop = loop('siren');
     let release: (() => void) | undefined;
@@ -20,8 +20,8 @@ export function AlarmScreen({ onStop }: { onStop: () => void }) {
   return (
     <div className="alarm-screen" role="alertdialog" aria-modal="true" aria-label="Alarm läuft">
       <div className="alarm-text">ALARM</div>
-      <a className="emergency-btn alarm-call" href="tel:112">
-        <b>112</b>
+      <a className="emergency-btn alarm-call" href={`tel:${number}`}>
+        <b>{number}</b>
         <span>Euronotruf anrufen</span>
       </a>
       <button type="button" className="btn big alarm-stop" onClick={onStop}>

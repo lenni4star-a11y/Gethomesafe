@@ -80,6 +80,17 @@ const FEEDS = {
     lamps: () => [],
     holidays: ['0101', '0501', '1003', '1101', '1224', '1225', '1226', '1231'],
   },
+  sanfrancisco: {
+    // Muni (SFMTA), inkl. Owl-Nachtlinien; BART fährt nachts nicht
+    url: 'https://muni-gtfs.apps.sfmta.com/data/muni_gtfs-current.zip',
+    fallback: 'https://gtfs.sfmta.com/transitdata/google_transit.zip',
+    dir: 'gtfs-sanfrancisco',
+    out: 'transit-sanfrancisco.json',
+    source: 'San Francisco Municipal Transportation Agency (SFMTA), GTFS',
+    lat: 37.76,
+    lamps: () => [],
+    holidays: ['0101', '0704', '1111', '1225'],
+  },
   frankfurt: {
     // Fahrplan des Nahverkehrs in ganz Deutschland (DELFI e. V. über gtfs.de, CC BY 4.0), auf Frankfurt zugeschnitten
     url: 'https://download.gtfs.de/germany/nv_free/latest.zip',
@@ -210,12 +221,23 @@ async function buildFeed(city, index) {
     if (!exceptions.has(r.date)) exceptions.set(r.date, []);
     exceptions.get(r.date).push(r);
   }
-  const feedEnd = calendar.reduce((m, r) => (r.end_date > m ? r.end_date : m), '0');
+  // Gültigkeit des Fahrplans: aus calendar.txt und, falls ein Verkehrsbetrieb nur calendar_dates.txt nutzt (z. B. Muni), aus den Einzeltagen
+  const addDates = [...exceptions.entries()].filter(([, l]) => l.some((e) => e.exception_type === '1')).map(([d]) => d).sort();
+  const feedEnd = [...calendar.map((r) => r.end_date), addDates[addDates.length - 1] ?? '0'].reduce((m, x) => (x > m ? x : m), '0');
+  const feedStart = [...calendar.map((r) => r.start_date), addDates[0] ?? '99999999'].reduce((m, x) => (x < m ? x : m), '99999999');
   const DAYS = { mo: 2, fr: 5, sa: 6, so: 0 }; // Wochentag des Beispieltags (Di, Fr, Sa, So)
   const WD = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const picked = {};
   const start = new Date();
   start.setHours(12, 0, 0, 0);
+  // beginnt der Fahrplan erst in der Zukunft, ab dem ersten gültigen Tag suchen
+  if (feedStart !== '99999999' && feedStart > ymd(start)) start.setFullYear(+feedStart.slice(0, 4), +feedStart.slice(4, 6) - 1, +feedStart.slice(6, 8));
+  // ist der Fahrplan schon abgelaufen, die letzte gültige Woche nehmen (besser als gar nichts)
+  if (feedEnd !== '0' && feedEnd < ymd(start)) {
+    start.setFullYear(+feedEnd.slice(0, 4), +feedEnd.slice(4, 6) - 1, +feedEnd.slice(6, 8) - 8);
+    log('Achtung: Fahrplan abgelaufen, nehme die letzte gültige Woche');
+  }
+  log('Fahrplan gültig:', feedStart, 'bis', feedEnd);
   for (const [type, wd] of Object.entries(DAYS)) {
     const d = new Date(start);
     // nächster passender Tag, der kein (fester) Feiertag ist; die Tage um Weihnachten meiden

@@ -45,7 +45,7 @@ import { unlockAudio } from './signals';
 import { Icon, LineBadge, Wordmark } from './components/Icon';
 import { RouteOverview } from './components/RouteOverview';
 import { FeelMeter, RidePanel, rideMinutes, ScooterPanel, scooterMinutes, type TravelMode } from './components/TravelModes';
-import { emergencyText } from '../core/helplines';
+import { emergencyText, mainEmergency } from '../core/helplines';
 import { setCurrentCity } from './region';
 import { rememberCityCenter } from './mapStyle';
 
@@ -785,7 +785,7 @@ export function App() {
         />
       )}
 
-      {alarm && <AlarmScreen onStop={() => setAlarm(false)} />}
+      {alarm && <AlarmScreen number={mainEmergency(cityInfo.id)} onStop={() => setAlarm(false)} />}
 
       {showEscortSetup && (
         <EscortSetup

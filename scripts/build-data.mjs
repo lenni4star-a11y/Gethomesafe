@@ -56,8 +56,10 @@ const CITIES = [
   ...['frankfurt', 'koeln', 'muenchen']
     .filter((id) => config[id])
     .map((id) => ({ id, name: OSM_CITY[id].name, pilot: config[id].teile ?? 'alle', durchgang: [], offset: OSM_CITY[id].offset, prefix: id })),
+  // San Francisco: 41 Analysis Neighborhoods (DataSF)
+  ...(config.sanfrancisco ? [{ id: 'sanfrancisco', name: 'San Francisco', pilot: config.sanfrancisco.teile ?? 'alle', durchgang: [], offset: 800, prefix: 'sf' }] : []),
 ];
-const LAT = { wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37, frankfurt: 50.11, koeln: 50.94, muenchen: 48.14 };
+const LAT = { sanfrancisco: 37.76, wien: 48.2, linz: 48.3, berlin: 52.5, zuerich: 47.37, frankfurt: 50.11, koeln: 50.94, muenchen: 48.14 };
 
 const PBF_URL = {
   wien: 'https://download.bbbike.org/osm/bbbike/Wien/Wien.osm.pbf',
@@ -67,6 +69,7 @@ const PBF_URL = {
   frankfurt: 'https://download.bbbike.org/osm/bbbike/Frankfurt/Frankfurt.osm.pbf',
   koeln: 'https://download.bbbike.org/osm/bbbike/Koeln/Koeln.osm.pbf',
   muenchen: 'https://download.bbbike.org/osm/bbbike/Muenchen/Muenchen.osm.pbf',
+  sanfrancisco: 'https://download.bbbike.org/osm/bbbike/SanFrancisco/SanFrancisco.osm.pbf',
 };
 // Stadt Zürich Open Data (Geoportal, CC0): statistische Quartiere und öffentliche Beleuchtung
 const ZH_WFS = (layer, type) => `https://www.ogd.stadt-zuerich.ch/wfs/geoportal/${layer}?service=WFS&version=1.1.0&request=GetFeature&typename=${type}&srsName=EPSG:4326`;
@@ -104,6 +107,67 @@ async function zuerichDistricts() {
     })
     .sort((a, b) => a.num - b.num || a.name.localeCompare(b.name))
     .map((q, i) => ({ nr: i + 1, name: q.name, poly: q.poly }));
+}
+
+// San Francisco: Analysis Neighborhoods (DataSF, Public Domain Dedication and License)
+const SF_HOODS = ['https://data.sfgov.org/resource/j2bu-swwd.geojson?$limit=100', 'https://data.sf.gov/api/v3/views/j2bu-swwd/query.geojson?accessType=DOWNLOAD'];
+async function sfHoods() {
+  for (const url of SF_HOODS) {
+    try {
+      const d = readJson(await download(url, 'sf-hoods.json'));
+      if (d.features?.length) return d;
+    } catch (e) {
+      log('  DataSF Viertel:', e.message);
+      fs.rmSync(path.join(RAW, 'sf-hoods.json'), { force: true });
+    }
+  }
+  throw new Error('Viertel von San Francisco nicht geladen');
+}
+const sfName = (p) => p.nhood ?? p.NHOOD ?? p.name ?? 'Viertel';
+const sfPolys = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map((pl) => pl.map((ring) => ring.map(lonLat)));
+async function sfDistricts() {
+  const d = await sfHoods();
+  return d.features
+    .filter((f) => f.geometry)
+    .map((f) => {
+      const polys = sfPolys(f.geometry).sort((a, b) => b[0].length - a[0].length);
+      return { name: sfName(f.properties ?? {}), poly: polys[0] };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((q, i) => ({ nr: i + 1, name: q.name, poly: q.poly }));
+}
+// San Francisco: Vorfälle der Polizei SFPD (DataSF), nur Raub und Körperverletzung der letzten 12 Monate,
+// gezählt je Viertel, als Dichte pro km². Die 4 dichtesten Viertel → Stufe 2, die nächsten 6 → Stufe 1.
+async function sfCrime() {
+  try {
+    const since = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+    const q = new URLSearchParams({
+      $select: 'analysis_neighborhood, count(*) as n',
+      $where: `incident_category in ('Robbery','Assault') and incident_date >= '${since}'`,
+      $group: 'analysis_neighborhood',
+      $limit: '200',
+    });
+    const res = await fetch('https://data.sfgov.org/resource/wg3w-h783.json?' + q);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    const counts = new Map(rows.filter((r) => r.analysis_neighborhood).map((r) => [r.analysis_neighborhood, Number(r.n) || 0]));
+    const d = await sfHoods();
+    const regions = d.features
+      .filter((f) => f.geometry && counts.has(sfName(f.properties ?? {})))
+      .map((f) => {
+        const polys = sfPolys(f.geometry);
+        const km2 = polys.reduce((a, pl) => a + ringKm2(pl[0]), 0) || 1;
+        return { name: sfName(f.properties), polys, density: counts.get(sfName(f.properties)) / km2 };
+      })
+      .sort((a, b) => b.density - a.density);
+    regions.forEach((r, i) => (r.level = i < 4 ? 2 : i < 10 ? 1 : 0));
+    log(`  Polizeistatistik San Francisco seit ${since}: ${regions.length} Viertel, am dichtesten: ${regions.slice(0, 6).map((r) => r.name).join(', ')}`);
+    if (!regions.length) return null;
+    return (pt) => regions.find((r) => r.level && r.polys.some((p) => pointInPolygon(pt, p)))?.level ?? 0;
+  } catch (e) {
+    log('  Polizeistatistik San Francisco nicht verfügbar, ohne Abzug weiter:', e.message);
+    return null;
+  }
 }
 
 // Zürich: Polizeiliche Kriminalstatistik des Kantons je Stadtkreis (Open Data Zürich, CC BY), nur Delikte gegen
@@ -606,6 +670,7 @@ async function buildCity(city, acc) {
   } else if (city.id === 'linz') raw = await linzDistricts();
   else if (city.id === 'berlin') raw = await berlinDistricts();
   else if (OSM_CITY[city.id]) raw = await osmDistricts(city.id);
+  else if (city.id === 'sanfrancisco') raw = await sfDistricts();
   else raw = await zuerichDistricts();
   const PILOT = city.pilot === 'alle' ? raw.map((b) => b.nr) : city.pilot.map(Number);
   const TRANSIT = city.durchgang.map(Number).filter((n) => !PILOT.includes(n));
@@ -646,7 +711,7 @@ async function buildCity(city, acc) {
     }
   }
   log('Leuchten der Stadt im Gebiet:', lampCount);
-  const crimeAt = city.id === 'berlin' ? await berlinCrime() : city.id === 'zuerich' ? await zuerichCrime() : city.id === 'wien' ? wienCrime() : WVZ[city.id] ? zoneCrime(WVZ[city.id]) : null;
+  const crimeAt = city.id === 'berlin' ? await berlinCrime() : city.id === 'zuerich' ? await zuerichCrime() : city.id === 'wien' ? wienCrime() : city.id === 'sanfrancisco' ? await sfCrime() : WVZ[city.id] ? zoneCrime(WVZ[city.id]) : null;
 
   // 2b. Auf Mapillary-Fotos erkannte Straßenlaternen (Vektor-Kacheln, Zoomstufe 14)
   const mlyGrid = new Grid(25);
@@ -1082,7 +1147,9 @@ async function buildCity(city, acc) {
         ? 'Datenquelle: Geoportal Berlin (Datenlizenz Deutschland – Zero – 2.0): Ortsteile, öffentliche Beleuchtung, Bezirksregionen; Polizei Berlin: Kriminalitätsatlas (CC BY-SA), kriminalitätsbelastete Orte'
         : city.id === 'zuerich'
           ? 'Datenquelle: Stadt Zürich Open Data (CC0): statistische Quartiere, öffentliche Beleuchtung'
-        : OSM_CITY[city.id]
+        : city.id === 'sanfrancisco'
+          ? 'Datenquelle San Francisco: DataSF – Analysis Neighborhoods und SFPD Incident Reports (Public Domain Dedication and License)'
+          : OSM_CITY[city.id]
           ? `Datenquelle ${OSM_CITY[city.id].name}: Stadtteile aus OpenStreetMap (ODbL); Waffenverbotszonen laut Stadt bzw. Polizei`
           : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
@@ -1157,7 +1224,7 @@ async function main() {
     mapillary: false,
   };
   for (const city of CITIES) {
-    if (!OSM_CITY[city.id]) {
+    if (!OSM_CITY[city.id] && city.id !== 'sanfrancisco') {
       await buildCity(city, acc);
       continue;
     }
