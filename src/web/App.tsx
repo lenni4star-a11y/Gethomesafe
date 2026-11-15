@@ -25,7 +25,6 @@ import { SoundCheck } from './components/SoundCheck';
 import { triggerSilentAlarm } from './silentAlarm';
 import { Onboarding } from './components/Onboarding';
 import { PrivacyPage } from './components/PrivacyPage';
-import { Legend } from './components/Legend';
 import { Modal } from './components/Modal';
 import { MapView, type MapHandle } from './components/MapView';
 import { PlaceInput } from './components/PlaceInput';
@@ -395,7 +394,6 @@ export function App() {
         <Icon name="star" size={22} />
       </button>
 
-      {chosen && !flying && <Legend dark={plan?.safest.dark ?? dark} />}
 
       {streetMode && !streetAt && (
         <div className="pick-banner" role="status">

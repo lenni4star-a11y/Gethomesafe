@@ -58,7 +58,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 
 ### Route und Karte
 - Schnellste und sicherste Route und ggf. „Mit Öffis“ (vorausgewählt, wenn der Fußweg ≥ 25 min und Öffis mind. ⅓ schneller sind; `recommendTransit`), jeweils mit Dauer, Länge, **Sicherheitswert 1–10** und kurzer Begründung.
-- **Farbstufen je Wegabschnitt mit Legende:** grün = beleuchtet und nicht schlecht bewertet; gelb = teilweise beleuchtet, keine Daten oder mäßig bewertet (zusätzlich gestrichelt); rot = unbeleuchtet oder schlecht bewertet. Tagsüber zählt Beleuchtung nicht.
+- **Farbstufen je Wegabschnitt, ohne Legende auf der Karte** (Nov. 2026: Grün bis Rot ist selbsterklärend, und eine Legende verwirrte neben roten/orangen U-Bahn- und Tramlinien): grün = beleuchtet und nicht schlecht bewertet; gelb = teilweise beleuchtet, keine Daten oder mäßig bewertet (zusätzlich gestrichelt); rot = unbeleuchtet oder schlecht bewertet. Tagsüber zählt Beleuchtung nicht.
 - **Wochentag und Uhrzeit:** Losgeh-Zeit frei wählbar (Tag + Uhrzeit + Schnellwahl wie „Sa 2:00“). Öffnungszeiten und Bewertungen werden für genau diese Zeit ausgewertet.
 - **Offene Orte am Weg** (bis 50 m): Liste in den Details (gruppiert, mit „bis wann geöffnet“) und auf der Karte als schlichte Punkte (keine Emojis; groß erst ab Zoom 16, Name im Popup).
 - **Weg im Überblick** (`RouteOverview`, direkt unter den Routen-Karten, vor der Entscheidung): Streifen Start→Ziel in Farbstufen mit Markierungen für Unterführung/Stiege/dunkle Stücke, Anteile gut/mittel/schlecht, die ersten Stellen mit Abstand (antippen = auf der Karte zeigen), Anzahl geöffneter Orte. Bei Öffis: die Teilstrecken als Liste.
