@@ -377,13 +377,16 @@ export function App() {
       <header className="topbar">
         <Wordmark />
         {cities.length > 1 ? (
-          <select className="badge city-select top" aria-label="Stadt wählen" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <span className="badge city-pick">
+            <span className="city-pick-label">{cityInfo.name}</span>
+            <select className="city-pick-select" aria-label="Stadt wählen" value={cityInfo.id} onChange={(e) => changeCity(e.target.value)}>
+              {cities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </span>
         ) : null}
         <span className="badge proto">Prototyp</span>
       </header>
