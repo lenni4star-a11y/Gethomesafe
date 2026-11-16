@@ -82,7 +82,7 @@ Der Standort funktioniert im Browser nur über **https**. Zwei Möglichkeiten:
 **B) Online über GitHub Pages (empfohlen)**
 
 Die App wird bei jeder Änderung auf `main` automatisch veröffentlicht unter
-**https://lenni4star-a11y.github.io/Gethomesafe/**. Diesen Link einfach am Handy öffnen oder an Testpersonen schicken.
+**https://goodwayapp.com** (früher https://lenni4star-a11y.github.io/Gethomesafe/, leitet weiter). Diesen Link einfach am Handy öffnen oder an Testpersonen schicken.
 
 Einmalige Einrichtung (Repo muss öffentlich sein, sonst braucht GitHub Pages ein Bezahl-Abo):
 1. Repo → **Settings** → **General** → ganz unten „Danger Zone“ → **Change visibility** → **Make public**

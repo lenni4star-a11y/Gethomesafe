@@ -15,7 +15,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - In **Phasen bzw. Blöcken** arbeiten. Nach jedem Block kurz sagen, was gemacht wurde und **wie man es am Handy testet**.
 - **Vor neuen Diensten mit Kosten oder Accounts fragen.**
 - App-Sprache: Deutsch, gendergerecht, freundlich und ruhig.
-- Testen am Handy: Die App wird bei jedem Push auf `main` automatisch auf GitHub Pages veröffentlicht: https://lenni4star-a11y.github.io/Gethomesafe/ (Workflow `.github/workflows/pages.yml`). Lokal mit https: `npm run dev:https`.
+- Testen am Handy: Die App wird bei jedem Push auf `main` automatisch auf GitHub Pages veröffentlicht: **https://goodwayapp.com** (eigene Adresse seit 16.11.2026, gekauft bei Porkbun, DNS: 4 A-Einträge auf GitHub Pages + CNAME www; die alte Adresse lenni4star-a11y.github.io/Gethomesafe/ leitet weiter; Einstellung „Custom domain“ in GitHub → Settings → Pages) (Workflow `.github/workflows/pages.yml`). Lokal mit https: `npm run dev:https`.
 - Immer auf iPhone (Safari) und Android (Chrome), im Hoch- und Querformat und auf kleinem Bildschirm (z. B. iPhone SE) prüfen. In der Cloud-Umgebung gibt es nur einen Test-Chrome mit Handy-Größe; echte Geräte-Tests (Ton, Vibration, Lautlos-Schalter) muss die Projektinhaber·in machen – das ehrlich sagen.
 - **Geheimnisse nie ins Repo:** Mapillary-Token nur in `.env` (lokal, in `.gitignore`) bzw. als GitHub-Secret `MAPILLARY_TOKEN`; Supabase-Adresse und öffentlicher Schlüssel als Secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY` (lokal `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`). Token nicht im Chat erfragen. Den Supabase-Secret-/service_role-Schlüssel nie verwenden.
 
