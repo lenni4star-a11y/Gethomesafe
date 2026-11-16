@@ -38,7 +38,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
         <h3>Welche Dienste die App aufruft</h3>
         <ul>
           <li>
-            <b>GitHub Pages</b> (USA): liefert die App aus. Dabei wird wie bei jeder Webseite deine IP-Adresse verarbeitet.
+            <b>GitHub Pages</b> (USA): liefert die App unter goodwayapp.com aus. Dabei wird wie bei jeder Webseite deine IP-Adresse verarbeitet.
           </li>
           <li>
             <b>OpenFreeMap</b>: Kartenbilder. Übertragen wird, welchen Kartenausschnitt du ansiehst.
@@ -79,7 +79,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
         <ul>
           <li>Einzeln: Zuhause, Kontakte und Bewertungen lassen sich in der App löschen.</li>
           <li>Alles auf einmal: ⚙ Einstellungen → „Alle meine Daten löschen“.</li>
-          <li>Oder: In den Browser-Einstellungen die Website-Daten von lenni4star-a11y.github.io löschen.</li>
+          <li>Oder: In den Browser-Einstellungen die Website-Daten von goodwayapp.com löschen.</li>
         </ul>
         {onDeleteAll && (
           <button type="button" className="btn danger" onClick={onDeleteAll}>
