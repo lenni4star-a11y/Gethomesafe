@@ -10,6 +10,7 @@ import { formatClock, lineColor, MODE_LABEL, TransitNetwork, type RideLeg, type 
 import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
+import { ZoneLookup, type ZoneFile } from './zones';
 import { setHolidayRegion } from './openingHours';
 import { cityOf, type DataIndex, type DistrictFile, type DistrictInfo, type Extras, type LngLat } from './types';
 
@@ -28,6 +29,7 @@ export class Planner {
   readonly graph = new Graph();
   private loading = new Map<number, Promise<void>>();
   private extrasPromise: Promise<Extras | null> | null = null;
+  private zonesPromise: Promise<ZoneFile | null> | null = null;
   private transitPromises = new Map<string, Promise<TransitNetwork | null>>();
 
   /** Öffi-Fahrplan der Stadt (Wien: transit.json, sonst transit-<stadt>.json); fehlt die Datei, gibt es keine Öffi-Vorschläge */
@@ -50,6 +52,12 @@ export class Planner {
   extras(): Promise<Extras | null> {
     this.extrasPromise ??= this.load<Extras>('extras.json').catch(() => null);
     return this.extrasPromise;
+  }
+
+  /** Amtliche Zonen und gemeldete Vorfälle (zonen.json); fehlt die Datei, geht es ohne */
+  zones(): Promise<ZoneFile | null> {
+    this.zonesPromise ??= this.load<ZoneFile>('zonen.json').catch(() => null);
+    return this.zonesPromise;
   }
 
   constructor(
@@ -90,7 +98,9 @@ export class Planner {
     const rating = opts.ratings?.length ? ratingLookup(this.graph, opts.ratings, timeFilterFor(date)) : opts.rating;
     const extras = await this.extras();
     const activeWorks = new Set((extras?.works ?? []).filter((w) => isActive(w.from, w.to, date)).map((w) => w.id));
-    const ctx = createContext(date, isDark(date, from[1], from[0]), { ...opts, rating, activeWorks });
+    const zoneFile = await this.zones();
+    const zones = zoneFile?.zones.length ? new ZoneLookup(zoneFile.zones, date) : undefined;
+    const ctx = createContext(date, isDark(date, from[1], from[0]), { ...opts, rating, activeWorks, zones });
     const fast = findRoute(this.graph, from, to, 'fastest', ctx);
     const safe = findRoute(this.graph, from, to, 'safest', ctx);
     if (!fast || !safe) return null;

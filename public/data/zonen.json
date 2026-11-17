@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "updated": "2026-11-17",
+  "hinweis": "Von Hand gepflegt. Nur amtliche Zonen (Verordnung/Stadt) und konkrete Vorfälle aus seriösen Medien- oder Polizeiberichten, jeweils mit Quelle. Nur Ort und Situation beschreiben, nie Gruppen von Menschen. Vorfälle verlieren nach einem halben Jahr an Gewicht und zählen nach zwei Jahren nicht mehr.",
+  "zones": [
+    { "id": "wien-schutz-fritz-imhoff-park", "kind": "schutzzone", "name": "Fritz-Imhoff-Park / U6 Gumpendorfer Straße", "at": [16.3392, 48.1905], "r": 200, "from": "2026-11-08", "until": "2027-05-07", "source": "Landespolizeidirektion Wien, Verordnung vom 04.11.2026", "url": "https://www.polizei.gv.at/lpd_docs/4652.pdf" },
+    { "id": "wien-schutz-yppenplatz", "kind": "schutzzone", "name": "Yppenplatz", "at": [16.3361, 48.2131], "r": 150, "from": "2026-08-03", "until": "2027-02-03", "source": "Landespolizeidirektion Wien, Verordnung", "url": "https://www.polizei.gv.at/lpd_docs/4497.pdf" },
+    { "id": "wien-alkohol-westbahnhof", "kind": "alkoholverbot", "name": "Westbahnhof", "at": [16.3385, 48.1968], "r": 250, "from": "2026-05-08", "source": "wien.ORF.at, 11.08.2026", "url": "https://wien.orf.at/stories/3366583/" },
+    { "id": "wien-alkohol-praterstern", "kind": "alkoholverbot", "name": "Praterstern", "at": [16.3913, 48.2186], "r": 260, "from": "2018-04-27", "source": "wien.ORF.at, 11.08.2026", "url": "https://wien.orf.at/stories/3366583/" },
+    { "id": "wien-alkohol-franz-jonas-platz", "kind": "alkoholverbot", "name": "Franz-Jonas-Platz", "at": [16.3985, 48.2573], "r": 200, "from": "2025-02-07", "source": "Bezirksvorstehung Floridsdorf (OTS), 26.01.2026", "url": "https://www.ots.at/presseaussendung/OTS_20260126_OTS0061/nach-erfolgreicher-zwischenbilanz-alkoholverbot-am-franz-jonas-platz-bleibt" },
+    { "id": "wien-vorfall-2026-01-18-u6-gumpendorfer", "kind": "vorfall", "name": "U6 Gumpendorfer Straße", "at": [16.3375, 48.1906], "r": 150, "date": "2026-01-18", "what": "einen Raub", "source": "VIENNA.AT, 19.01.2026", "url": "https://www.vienna.at/mann-in-wiener-u6-station-gumpendorfer-strasse-von-duo-beraubt-und-verletzt/9931559" },
+    { "id": "wien-vorfall-2026-08-08-rechte-wienzeile", "kind": "vorfall", "name": "Rechte Wienzeile beim Naschmarkt", "at": [16.3625, 48.198], "r": 200, "date": "2026-08-08", "what": "eine Belästigung", "source": "wien.ORF.at, 16.11.2026", "url": "https://wien.orf.at/stories/3379734/" }
+  ]
+}

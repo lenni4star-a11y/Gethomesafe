@@ -3,6 +3,7 @@
 
 import { openState, type OpenState } from './openingHours';
 import { Flag, WayKind, type Edge, type Poi } from './types';
+import type { ZoneLookup } from './zones';
 
 export const WEIGHTS = {
   /** Nachts: Anteil von Beleuchtung, Art des Weges und „Belebtheit“ am Risiko */
@@ -87,6 +88,8 @@ export interface SafetyContext {
   activeWorks?: Set<string>;
   /** amtliche Kriminalitätsdaten berücksichtigen (Standard: ja) */
   crimeData?: boolean;
+  /** amtliche Zonen und gemeldete Vorfälle (zonen.json) */
+  zones?: ZoneLookup;
 }
 
 export interface ContextOptions {
@@ -95,6 +98,7 @@ export interface ContextOptions {
   rating?: (e: Edge) => EdgeRating | null;
   /** amtliche Kriminalitätsdaten berücksichtigen (Standard: ja) */
   crimeData?: boolean;
+  zones?: ZoneLookup;
 }
 
 export function createContext(date: Date, dark: boolean, opts: ContextOptions = {}): SafetyContext {
@@ -106,6 +110,7 @@ export function createContext(date: Date, dark: boolean, opts: ContextOptions = 
     rating: opts.rating,
     activeWorks: opts.activeWorks,
     crimeData: opts.crimeData,
+    zones: opts.zones,
     open: (poi) => {
       let s = memo.get(poi.id);
       if (!s) memo.set(poi.id, (s = openState(poi, date)));
@@ -149,6 +154,17 @@ export function frontageRisk(e: Edge): number {
   return 1;
 }
 
+/** Abzug durch amtliche Daten und gemeldete Vorfälle (vor Tag/Nacht-Faktor).
+ *  Amtlich: die höchste Stufe aus Kantenfeld crime und gültigen Zonen zählt (nicht doppelt).
+ *  Vorfälle: je Bericht bis zu Stufe 1, zusammen höchstens Stufe 2, werden mit dem Alter schwächer. */
+export function crimeRisk(e: Edge, ctx: SafetyContext): number {
+  const z = ctx.zones?.at(e);
+  const level = Math.max(e.crime ?? 0, z?.level ?? 0);
+  const official = WEIGHTS.crime[level] ?? 0;
+  const incidents = z ? Math.min(WEIGHTS.crime[2], z.incidents * WEIGHTS.crime[1]) : 0;
+  return Math.min(WEIGHTS.crime[3], official + incidents);
+}
+
 export interface EdgeRisk {
   risk: number;
   light: number;
@@ -164,7 +180,7 @@ export function edgeRisk(e: Edge, pois: Map<string, Poi>, ctx: SafetyContext): E
   if (ctx.activeWorks && e.works.some((id) => ctx.activeWorks!.has(id))) way = Math.min(1, way + 0.15);
   const life = lifeRisk(e, pois, ctx);
   let risk = w.light * light + w.way * way + w.life * life;
-  if (e.crime && ctx.crimeData !== false) risk += (WEIGHTS.crime[e.crime] ?? 0) * (ctx.dark ? 1 : 0.5);
+  if (ctx.crimeData !== false) risk += crimeRisk(e, ctx) * (ctx.dark ? 1 : 0.5);
 
   // Bewertungen verschieben das Ergebnis, je mehr es gibt, desto stärker
   const rating = ctx.rating?.(e);
