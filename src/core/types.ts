@@ -98,6 +98,8 @@ export interface CityInfo {
   transit: boolean;
   /** Leuchtenstandorte der Stadt vorhanden? */
   lamps: boolean;
+  /** Lichtpunkte für die Licht-Ansicht (lichter-<stadt>.json), fehlt bei alten Daten */
+  lights?: string | null;
   bbox: [number, number, number, number];
 }
 

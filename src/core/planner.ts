@@ -11,6 +11,7 @@ import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
 import { ZoneLookup, type ZoneFile } from './zones';
+import { decodeLights, type LightsFile } from './lights';
 import { setHolidayRegion } from './openingHours';
 import { cityOf, type DataIndex, type DistrictFile, type DistrictInfo, type Extras, type LngLat } from './types';
 
@@ -59,6 +60,20 @@ export class Planner {
     this.zonesPromise ??= this.load<ZoneFile>('zonen.json').catch(() => null);
     return this.zonesPromise;
   }
+
+  /** Lichtpunkte einer Stadt (Laternen) für die Licht-Ansicht; null, wenn es keine gibt */
+  async lights(city: string): Promise<LngLat[] | null> {
+    const file = this.index.cities?.find((c) => c.id === city)?.lights;
+    if (!file) return null;
+    this.lightsCache ??= new Map();
+    let p = this.lightsCache.get(file);
+    if (!p) {
+      p = this.load<LightsFile>(file).then(decodeLights).catch(() => null);
+      this.lightsCache.set(file, p);
+    }
+    return p;
+  }
+  private lightsCache?: Map<string, Promise<LngLat[] | null>>;
 
   constructor(
     readonly index: DataIndex,
