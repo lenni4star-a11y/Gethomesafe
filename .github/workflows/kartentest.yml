@@ -11,6 +11,7 @@ on:
 jobs:
   fotos:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,11 +24,13 @@ jobs:
       - run: npm run build
       - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
       - name: Fotos
+        timeout-minutes: 15
         run: |
           npx vite preview --port 4173 --strictPort &
           sleep 5
           node scripts/kartentest.mjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: kartentest
           path: |

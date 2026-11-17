@@ -22,23 +22,27 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 page.on('console', (m) => m.type() === 'error' && console.log('Konsole:', m.text()));
 await page.clock.setFixedTime(new Date('2026-11-18T23:30:00+01:00'));
-await page.goto(BASE + '?kartentest', { waitUntil: 'networkidle' });
+console.log('öffne', BASE);
+await page.goto(BASE + '?kartentest', { waitUntil: 'domcontentloaded', timeout: 30000 });
+await page.waitForTimeout(4000);
+await page.screenshot({ path: `${OUT}/00-start.png` });
 const skip = page.getByText('Überspringen');
 if (await skip.isVisible().catch(() => false)) await skip.click();
-await page.waitForFunction(() => window.__gwMap?.loaded(), null, { timeout: 60000 });
+await page.waitForFunction(() => !!window.__gwMap, null, { timeout: 30000 }).catch(() => console.log('keine Karte gefunden'));
+console.log('Karte da');
 
 for (const [city, center] of CITIES) {
   await page.selectOption('.city-pick-select', city).catch((e) => console.log('Stadt', city, e.message));
   await page.waitForTimeout(1500);
   // warten, bis die Lichtpunkte geladen sind
   await page
-    .waitForFunction(() => (window.__gwMap.getSource('lights')?._data?.features?.length ?? 0) > 1000, null, { timeout: 60000 })
+    .waitForFunction(() => (window.__gwMap.getSource('lights')?._data?.features?.length ?? 0) > 1000, null, { timeout: 25000 })
     .catch(() => console.log('keine Lichtpunkte für', city));
   const n = await page.evaluate(() => window.__gwMap.getSource('lights')?._data?.features?.length ?? 0);
   console.log(city, 'Lichtpunkte:', n);
   for (const z of ZOOMS) {
     await page.evaluate(([c, zz]) => window.__gwMap.jumpTo({ center: c, zoom: zz }), [center, z]);
-    await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/${city}-z${String(z).replace('.', '_')}.png` });
   }
