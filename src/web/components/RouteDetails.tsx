@@ -15,6 +15,8 @@ const HINT_ICON: Record<Hint['kind'], string> = {
   tunnel: '⤓',
   steps: '≡',
   track: '∿',
+  zone: '!',
+  report: '!',
 };
 
 /** Straßenfotos von Mapillary auf der Webseite (ohne Schlüssel ansehbar) */

@@ -16,7 +16,9 @@ export interface ColorSegment {
   coords: LngLat[];
 }
 
-export type HintKind = 'dark' | 'unknown' | 'park' | 'tunnel' | 'steps' | 'track';
+export type HintKind = 'dark' | 'unknown' | 'park' | 'tunnel' | 'steps' | 'track' | 'zone' | 'report';
+/** Stellen, die aus zusammenhängenden Wegstücken entstehen (ohne Zonen/Vorfälle) */
+type RunKind = Exclude<HintKind, 'zone' | 'report'>;
 
 export interface Hint {
   kind: HintKind;
@@ -92,13 +94,13 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   let parkLen = 0;
   let mainLen = 0;
   let shopLen = 0;
-  const zoneHits = new Map<string, { zone: Zone; length: number }>();
+  const zoneHits = new Map<string, { zone: Zone; length: number; offset: number; at: LngLat }>();
   let kboLen = 0;
   let atlasLen = 0;
   let tunnels = 0;
 
   // Laufende Abschnitte für Hinweise
-  let run: { kind: HintKind; start: number; length: number; coords: LngLat[] } | null = null;
+  let run: { kind: RunKind; start: number; length: number; coords: LngLat[] } | null = null;
   const closeRun = () => {
     if (!run) return;
     const min = run.kind === 'tunnel' || run.kind === 'steps' ? 0 : run.kind === 'park' ? 100 : 60;
@@ -132,7 +134,8 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     if ((e.frontage ?? 0) >= 5) shopLen += e.length;
     if (ctx.crimeData !== false && ctx.zones) {
       for (const z of ctx.zones.at(e).zones) {
-        zoneHits.set(z.id, { zone: z, length: (zoneHits.get(z.id)?.length ?? 0) + e.length });
+        const prev = zoneHits.get(z.id);
+        zoneHits.set(z.id, prev ? { ...prev, length: prev.length + e.length } : { zone: z, length: e.length, offset: length, at: c[Math.floor(c.length / 2)] });
       }
     }
     if (ctx.crimeData !== false && e.crime === 3) kboLen += e.length;
@@ -146,7 +149,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     if (last && last.cls === cls) last.coords.push(...c.slice(1));
     else segments.push({ cls, coords: [...c] });
 
-    const kind: HintKind | null =
+    const kind: RunKind | null =
       e.flags & Flag.Tunnel
         ? 'tunnel'
         : e.kind === WayKind.Steps
@@ -169,6 +172,12 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     length += e.length;
   }
   closeRun();
+  // amtliche Zonen und gemeldete Vorfälle als eigene Stellen (im Überblick zuerst)
+  for (const h of zoneHits.values()) {
+    if (h.zone.kind !== 'vorfall' && h.length < 30) continue;
+    hints.push({ kind: h.zone.kind === 'vorfall' ? 'report' : 'zone', text: zoneLabel(h.zone), at: h.at, offset: h.offset, length: h.zone.kind === 'vorfall' ? 0 : h.length });
+  }
+  hints.sort((a, b) => a.offset - b.offset);
 
   const tail = distance(coords[coords.length - 1], route.to);
   coords.push(route.to);
@@ -223,10 +232,13 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   if (tunnels) reasons.push(tunnels === 1 ? '1 Unterführung' : `${tunnels} Unterführungen`);
   if (mainLen / netLen >= 0.5) reasons.push('überwiegend Hauptstraßen');
   if (shopLen / netLen >= 0.3) reasons.push(`${pct(shopLen / netLen)} % Geschäftsstraße (Schaufenster, Eingänge)`);
-  // amtliche Zonen (aus zonen.json) und gemeldete Vorfälle, mit Quelle in den Details
+  // amtliche Zonen (aus zonen.json) und gemeldete Vorfälle, mit Quelle in den Details – weit vorne in der Begründung
   const zones = [...zoneHits.values()].filter((h) => h.zone.kind === 'vorfall' || h.length >= 30).map((h) => h.zone);
-  for (const z of zones.filter((z) => z.kind !== 'vorfall').slice(0, 2)) reasons.push(`durch eine ${zoneLabel(z)}`);
-  for (const z of zones.filter((z) => z.kind === 'vorfall').slice(0, 2)) reasons.push(zoneLabel(z));
+  const zoneReasons = [
+    ...zones.filter((z) => z.kind !== 'vorfall').slice(0, 3).map((z) => `durch eine ${zoneLabel(z)}`),
+    ...zones.filter((z) => z.kind === 'vorfall').slice(0, 2).map((z) => zoneLabel(z)),
+  ];
+  reasons.splice(1, 0, ...zoneReasons);
   if (kboLen >= 50) reasons.push(`${Math.round(kboLen / 10) * 10} m durch einen polizeilich festgelegten Brennpunkt`);
   if (atlasLen / netLen >= 0.2) reasons.push(`${pct(atlasLen / netLen)} % in Gegenden mit mehr Gewalttaten (Polizeistatistik)`);
 
