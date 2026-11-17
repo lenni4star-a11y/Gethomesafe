@@ -8,6 +8,7 @@ import { edgeClass, edgeRisk, openPoisNear, scoreFromRisk, type SafetyClass, typ
 import { simpleHoursState, type OpenState } from './openingHours';
 import type { TransitOption } from './transit';
 import { Flag, WayKind, type Edge, type Extras, type LngLat, type Poi, type PublicToilet, type Roadworks, type TaxiStand } from './types';
+import { zoneLabel, type Zone } from './zones';
 
 /** Abschnitt mit gleicher Farbstufe (grün/gelb/rot) */
 export interface ColorSegment {
@@ -35,6 +36,8 @@ export interface Instruction {
 }
 
 export interface RouteSummary {
+  /** amtliche Zonen und gemeldete Vorfälle am Weg (mit Quelle) */
+  zones?: Zone[];
   mode: RouteMode | 'transit';
   /** Öffi-Fahrten (nur bei mode 'transit'), für die Karte */
   rides?: LngLat[][];
@@ -89,6 +92,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   let parkLen = 0;
   let mainLen = 0;
   let shopLen = 0;
+  const zoneHits = new Map<string, { zone: Zone; length: number }>();
   let kboLen = 0;
   let atlasLen = 0;
   let tunnels = 0;
@@ -126,6 +130,11 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     if (e.flags & Flag.Park) parkLen += e.length;
     if (e.kind === WayKind.Main) mainLen += e.length;
     if ((e.frontage ?? 0) >= 5) shopLen += e.length;
+    if (ctx.crimeData !== false && ctx.zones) {
+      for (const z of ctx.zones.at(e).zones) {
+        zoneHits.set(z.id, { zone: z, length: (zoneHits.get(z.id)?.length ?? 0) + e.length });
+      }
+    }
     if (ctx.crimeData !== false && e.crime === 3) kboLen += e.length;
     else if (ctx.crimeData !== false && (e.crime ?? 0) >= 1) atlasLen += e.length;
     if (e.flags & Flag.Tunnel) tunnels++;
@@ -214,6 +223,10 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
   if (tunnels) reasons.push(tunnels === 1 ? '1 Unterführung' : `${tunnels} Unterführungen`);
   if (mainLen / netLen >= 0.5) reasons.push('überwiegend Hauptstraßen');
   if (shopLen / netLen >= 0.3) reasons.push(`${pct(shopLen / netLen)} % Geschäftsstraße (Schaufenster, Eingänge)`);
+  // amtliche Zonen (aus zonen.json) und gemeldete Vorfälle, mit Quelle in den Details
+  const zones = [...zoneHits.values()].filter((h) => h.zone.kind === 'vorfall' || h.length >= 30).map((h) => h.zone);
+  for (const z of zones.filter((z) => z.kind !== 'vorfall').slice(0, 2)) reasons.push(`durch eine ${zoneLabel(z)}`);
+  for (const z of zones.filter((z) => z.kind === 'vorfall').slice(0, 2)) reasons.push(zoneLabel(z));
   if (kboLen >= 50) reasons.push(`${Math.round(kboLen / 10) * 10} m durch einen polizeilich festgelegten Brennpunkt`);
   if (atlasLen / netLen >= 0.2) reasons.push(`${pct(atlasLen / netLen)} % in Gegenden mit mehr Gewalttaten (Polizeistatistik)`);
 
@@ -236,6 +249,7 @@ export function summarize(graph: Graph, route: RawRoute, ctx: SafetyContext, ext
     taxi: taxi && { stand: taxi.item, distance: taxi.distance, offset: taxi.offset },
     toilets,
     policeFromCity,
+    zones,
   };
 }
 

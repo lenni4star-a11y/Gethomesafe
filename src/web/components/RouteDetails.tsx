@@ -1,6 +1,7 @@
 import type { Hint, RouteSummary } from '../../core/analysis';
 import { closesAt } from '../../core/openingHours';
 import type { LngLat, Poi } from '../../core/types';
+import { zoneLabel } from '../../core/zones';
 import { formatDistance, formatDuration } from '../format';
 import { PLACE_META, PLACE_ORDER, placeKindLabel, placeName } from '../places';
 import { SvgIcon } from './Icon';
@@ -121,6 +122,14 @@ export function RouteDetails({ route, date, onFocus }: Props) {
           )}
           <li>Wegart, Parks, Unterführungen: OpenStreetMap.</li>
           <li>Geöffnete Orte: Öffnungszeiten aus OpenStreetMap{route.policeFromCity ? ', Polizei auch laut Stadt Wien' : ''}; Öffi-Stationen nach ungefähren Betriebszeiten.</li>
+          {(route.zones ?? []).map((z) => (
+            <li key={z.id}>
+              {zoneLabel(z)}{z.until ? `, gültig bis ${z.until.split('-').reverse().join('.')}` : ''}:{' '}
+              <a href={z.url} target="_blank" rel="noopener noreferrer">
+                {z.source}
+              </a>
+            </li>
+          ))}
           <li>Deine eigenen Bewertungen (nur auf diesem Gerät).</li>
         </ul>
       </section>
