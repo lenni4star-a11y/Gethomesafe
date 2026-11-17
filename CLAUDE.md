@@ -53,7 +53,7 @@ Eine App, die FLINTA* und andere marginalisierte Menschen abends und nachts sich
 - **Geteilte Bewertungen mit verifiziertem Profil: gewünscht (Nov. 2026).** Bewertungen sollen geteilt werden; dafür reicht laut Projektinhaber·in ein verifiziertes Profil (Plan: Supabase Auth mit E-Mail-Bestätigung, keine SMS-Kosten). Wartet auf Einrichtung des Supabase-Projekts.
 - **Nachts zugesperrte Parks:** OSM-`opening_hours` an Parks → Kantenfeld 14 `parkHours`; außerhalb der Zeiten wird der Weg nie benutzt (`parkClosed`).
 - **Keine Orte als „Drogen-Hotspot“ markieren, keine Kategorien über Personengruppen** (amtliche kbO-Liste ist ortsbezogen und erlaubt, siehe oben) – weder in Daten noch in Bewertungsgründen oder Texten. Bewertungen beschreiben nur Ort und Situation.
-- **Alkoholverbotszonen:** Stand Oktober 2026 gibt es dazu **keine offenen Geodaten** der Stadt Wien (nur Zeitungsberichte, z. B. Praterstern seit 2018). Nicht von Hand einzeichnen. Erneut prüfen, falls die Stadt einen Datensatz veröffentlicht; dann nur mit Quelle und ohne Abwertung der Menschen vor Ort.
+- **Alkoholverbotszonen:** keine offenen Geodaten der Stadt Wien; seit Nov. 2026 als ungefähre Kreise mit Quelle in `zonen.json` (Westbahnhof, Praterstern, Franz-Jonas-Platz), Stufe 1, ohne Abwertung der Menschen vor Ort. Falls die Stadt einen Datensatz veröffentlicht, diesen nehmen.
 - Wo Daten fehlen, ehrlich „unbekannt“ bzw. gelb anzeigen statt raten.
 
 ## Funktionen (Stand und Anforderungen)
