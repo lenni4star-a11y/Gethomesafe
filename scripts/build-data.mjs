@@ -730,9 +730,10 @@ async function buildCity(city, acc) {
     const lampFile = await download(WFS + 'LAMPENTAUSCHOGD&propertyName=SHAPE', 'leuchten.json');
     for (const f of readJson(lampFile).features) {
       const [lon, lat] = f.geometry.coordinates;
+      // Licht-Ansicht: alle Leuchten Wiens (nicht nur das Pilotgebiet), sonst entsteht ein harter Rand
+      lightPts.push([lon, lat]);
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
-      lightPts.push([lon, lat]);
       lampCount++;
     }
   } else if (city.id === 'berlin' || city.id === 'zuerich') {

@@ -1,0 +1,30 @@
+# Testfotos der Karte (Licht-Ansicht) in allen Städten – nur von Hand starten.
+name: Kartentest
+on:
+  workflow_dispatch:
+
+jobs:
+  fotos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lichtpunkte Wien neu (ganze Stadt)
+        run: node scripts/lichter-wien.mjs
+      - run: npm run build
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Fotos
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          sleep 5
+          node scripts/kartentest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kartentest
+          path: |
+            kartentest/
+            public/data/lichter-wien.json

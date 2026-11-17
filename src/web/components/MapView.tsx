@@ -111,6 +111,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
       clickRef.current([e.lngLat.lng, e.lngLat.lat]);
     });
 
+    // für automatische Testfotos (?kartentest): Karte von außen steuerbar
+    if (location.search.includes('kartentest')) (window as unknown as { __gwMap: maplibregl.Map }).__gwMap = map;
+
     ready.current = new Promise((resolve) => {
       map.on('load', () => {
 
@@ -122,52 +125,63 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
         map.addSource('lights', { type: 'geojson', data: empty, buffer: 16, tolerance: 0 });
         // unter die Straßennamen, damit sie lesbar bleiben
         const labelLayer = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
-        map.addLayer({
-          id: 'lights-heat',
-          type: 'heatmap',
-          source: 'lights',
-          maxzoom: 18,
-          paint: {
-            'heatmap-weight': 1,
-            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.08, 12, 0.35, 15, 1],
-            'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 2, 12, 5, 15, 14, 17, 30],
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0, 'rgba(255,170,60,0)',
-              0.15, 'rgba(255,160,50,0.25)',
-              0.4, 'rgba(255,185,80,0.55)',
-              0.7, 'rgba(255,210,120,0.8)',
-              1, 'rgba(255,236,190,0.95)',
-            ],
-            'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0.9, 16, 0.45, 17.5, 0.15],
+        // Stufen: Stadt (Zoom ≤ 11) feines Leuchten entlang der Straßen · Viertel (12–13) Leuchten wird dünner,
+        // erste Lichtpunkte · Straße (≥ 14) nur noch einzelne Laternen mit kleinem Schein.
+        map.addLayer(
+          {
+            id: 'lights-heat',
+            type: 'heatmap',
+            source: 'lights',
+            maxzoom: 15.5,
+            paint: {
+              'heatmap-weight': 1,
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.03, 11, 0.06, 13, 0.12, 15, 0.25],
+              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 9, 1, 11, 1.6, 12, 2.2, 13, 3, 14, 4, 15, 5],
+              'heatmap-color': [
+                'interpolate',
+                ['linear'],
+                ['heatmap-density'],
+                0, 'rgba(255,170,60,0)',
+                0.2, 'rgba(255,160,55,0.35)',
+                0.5, 'rgba(255,185,85,0.65)',
+                0.8, 'rgba(255,205,120,0.85)',
+                1, 'rgba(255,225,160,0.95)',
+              ],
+              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.9, 13, 0.6, 14, 0.3, 15.5, 0],
+            },
           },
-        }, labelLayer);
-        map.addLayer({
-          id: 'lights-glow',
-          type: 'circle',
-          source: 'lights',
-          minzoom: 14,
-          paint: {
-            'circle-color': '#ffb84d',
-            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 14, 3, 17, 16, 19, 40],
-            'circle-blur': 1,
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15.5, 0.35],
+          labelLayer,
+        );
+        map.addLayer(
+          {
+            id: 'lights-glow',
+            type: 'circle',
+            source: 'lights',
+            minzoom: 12.5,
+            paint: {
+              'circle-color': '#ffb24a',
+              'circle-radius': ['interpolate', ['exponential', 1.8], ['zoom'], 12.5, 1.5, 15, 6, 17, 18, 19, 40],
+              'circle-blur': 1,
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 14, 0.3, 16, 0.4],
+            },
           },
-        }, labelLayer);
-        map.addLayer({
-          id: 'lights-core',
-          type: 'circle',
-          source: 'lights',
-          minzoom: 14,
-          paint: {
-            'circle-color': '#fff1c9',
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2.5, 19, 4],
-            'circle-blur': 0.3,
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, 0.95],
+          labelLayer,
+        );
+        map.addLayer(
+          {
+            id: 'lights-core',
+            type: 'circle',
+            source: 'lights',
+            minzoom: 12.5,
+            paint: {
+              'circle-color': '#ffe9b8',
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 0.4, 14, 1, 16, 2, 19, 4],
+              'circle-blur': 0.2,
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 13.5, 0.7, 15, 1],
+            },
           },
-        }, labelLayer);
+          labelLayer,
+        );
         let lightJob = 0;
         updateLights.current = () => {
           const src = map.getSource('lights') as GeoJSONSource | undefined;
