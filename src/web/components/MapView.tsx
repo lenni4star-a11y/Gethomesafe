@@ -85,9 +85,21 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
     mapRef.current = map;
     if (import.meta.env.DEV) (window as unknown as { __map: MLMap }).__map = map;
     // keine Zoom-Knöpfe: am Handy mit zwei Fingern zoomen (schlichte Oberfläche)
-    // Quellenangabe als kleiner Text statt Info-Knopf (OpenStreetMap und OpenFreeMap verlangen eine sichtbare Nennung);
-    // die Datenquellen der Städte stehen auf der Datenschutz-Seite
-    map.addControl(new maplibregl.AttributionControl({ compact: false }), 'top-right');
+    // Quellenangabe: beim Öffnen 5 Sekunden sichtbar, dann (oder beim ersten Verschieben) eingeklappt zu einem kleinen ⓘ.
+    // Das erlauben die Attribution Guidelines der OpenStreetMap Foundation, solange die Angabe per ⓘ auffindbar bleibt.
+    // Die Datenquellen der Städte stehen auf der Datenschutz-Seite.
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+    const attrib = () => container.current?.querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+    const setAttribOpen = (open: boolean) => {
+      const el = attrib();
+      if (!el) return;
+      el.classList.toggle('maplibregl-compact-show', open);
+      if (open) el.setAttribute('open', '');
+      else el.removeAttribute('open');
+    };
+    setAttribOpen(true);
+    const attribTimer = window.setTimeout(() => setAttribOpen(false), 5000);
+    map.once('movestart', () => (window.clearTimeout(attribTimer), setAttribOpen(false)));
     // Bei weitem Zoom Orts-Symbole als kleine Punkte zeigen
     const updateFar = () => container.current?.classList.toggle('far', map.getZoom() < 16);
     map.on('zoomend', updateFar);
@@ -100,8 +112,6 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
 
     ready.current = new Promise((resolve) => {
       map.on('load', () => {
-        // Quellenangabe zuerst eingeklappt (per ⓘ aufklappbar)
-        container.current?.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 
         map.addSource('area', { type: 'geojson', data: empty });
         // Bezirksgrenzen werden bewusst nicht gezeichnet (schlichte Karte)
