@@ -655,6 +655,35 @@ async function berlinLamps() {
   return out;
 }
 
+/** Lichtpunkte kompakt speichern: Koordinaten × 100.000, doppelte (≈ 1 m) entfernt, in Bändern sortiert und als Differenzen.
+ *  Die App zeichnet daraus nachts das Lichtermeer, das sich beim Hineinzoomen in einzelne Laternen auflöst. */
+function writeLights(cityId, pts) {
+  if (!pts.length) return null;
+  const seen = new Set();
+  const q = [];
+  for (const [x, y] of pts) {
+    const p = [Math.round(x * 1e5), Math.round(y * 1e5)];
+    const k = p[0] + ',' + p[1];
+    if (seen.has(k)) continue;
+    seen.add(k);
+    q.push(p);
+  }
+  q.sort((a, b) => Math.floor(a[1] / 200) - Math.floor(b[1] / 200) || a[0] - b[0] || a[1] - b[1]);
+  const d = [];
+  let px = 0;
+  let py = 0;
+  for (const [x, y] of q) {
+    d.push(x - px, y - py);
+    px = x;
+    py = y;
+  }
+  const fname = `lichter-${cityId}.json`;
+  const json = JSON.stringify({ v: 1, scale: 1e5, n: q.length, d });
+  fs.writeFileSync(path.join(OUT, fname), json);
+  log(`  ${fname}: ${q.length} Lichtpunkte, ${(json.length / 1024).toFixed(0)} KB`);
+  return fname;
+}
+
 async function buildCity(city, acc) {
   setProjection(LAT[city.id] ?? 48.2);
   log(`===== ${city.name} =====`);
@@ -695,18 +724,22 @@ async function buildCity(city, acc) {
   // 2. Leuchten der Stadt (Wien, Berlin; für Linz gibt es keine offenen Leuchtenstandorte)
   const lampGrid = new Grid(25);
   let lampCount = 0;
+  /** Laternen-Standorte für die Licht-Ansicht der Karte (lichter-<stadt>.json) */
+  const lightPts = [];
   if (city.id === 'wien') {
     const lampFile = await download(WFS + 'LAMPENTAUSCHOGD&propertyName=SHAPE', 'leuchten.json');
     for (const f of readJson(lampFile).features) {
       const [lon, lat] = f.geometry.coordinates;
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
+      lightPts.push([lon, lat]);
       lampCount++;
     }
   } else if (city.id === 'berlin' || city.id === 'zuerich') {
     for (const [lon, lat] of city.id === 'berlin' ? await berlinLamps() : await zuerichLamps()) {
       if (!inArea(lon, lat)) continue;
       lampGrid.add(lon, lat, [lon, lat]);
+      lightPts.push([lon, lat]);
       lampCount++;
     }
   }
@@ -743,6 +776,7 @@ async function buildCity(city, acc) {
         const [lon, lat] = f.toGeoJSON(x, y, z).geometry.coordinates;
         if (!inArea(lon, lat)) continue;
         mlyGrid.add(lon, lat, [lon, lat]);
+        if (!lampCount) lightPts.push([lon, lat]);
         mlyCount++;
       }
       if (++n % 10 === 0) log(`  Mapillary-Kacheln: ${n}/${tiles.size}`);
@@ -1076,6 +1110,9 @@ async function buildCity(city, acc) {
       const bez = bezirkAt(mid);
       if (!bez) continue;
 
+      // ohne Leuchtendaten der Stadt: laut OpenStreetMap beleuchtete Wege als Lichtpunkte etwa alle 32 m
+      if (!lampCount && osmLit === 1) for (let k = 2; k < samples.length; k += 4) lightPts.push(samples[k]);
+
       let covered = 0;
       for (const s of samples) if (lampGrid.near(s[0], s[1]).some((l) => dist(l, s) <= 22)) covered++;
       const lampCov = Math.round((covered / samples.length) * 100);
@@ -1154,11 +1191,13 @@ async function buildCity(city, acc) {
           : 'Datenquelle: Stadt Linz – data.linz.gv.at (CC BY 4.0): Grenzen der statistischen Bezirke',
   );
   if (mlyCount) acc.mapillary = true;
+  const lightsFile = writeLights(city.id, lightPts);
   index.cities.push({
     id: city.id,
     name: city.name,
     transit: isWien,
     lamps: lampCount > 0,
+    lights: lightsFile,
     bbox: bboxOf(bezirke.filter((b) => !b.transit).flatMap((b) => [[b.bbox[0], b.bbox[1]], [b.bbox[2], b.bbox[3]]])).map((v) => +v.toFixed(5)),
   });
   for (const b of bezirke) {

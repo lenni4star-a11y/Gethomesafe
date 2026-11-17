@@ -47,7 +47,8 @@ interface Props {
   city?: string;
   onMapClick: (p: LngLat) => void;
   /** Licht-Ansicht nachts: liefert beleuchtete Wege im Ausschnitt; fehlt sie, ist die Ansicht aus */
-  lightSource?: ((box: [number, number, number, number]) => Promise<{ coords: LngLat[]; strength: number }[]>) | null;
+  /** Laternen-Standorte der Stadt (nur nachts gesetzt) */
+  lightSource?: (() => Promise<LngLat[] | null>) | null;
 }
 
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -116,46 +117,73 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
         map.addSource('area', { type: 'geojson', data: empty });
         // Bezirksgrenzen werden bewusst nicht gezeichnet (schlichte Karte)
 
-        // Licht-Ansicht: beleuchtete Wege als warmer Schein (nur nachts, ab Zoom 14), unter den Routen
-        map.addSource('lights', { type: 'geojson', data: empty });
+        // Licht-Ansicht (nur nachts, unter den Routen): von weit weg ein warmes Lichtermeer (Heatmap),
+        // beim Hineinzoomen löst es sich in die einzelnen Laternen auf (Lichtpunkte mit Schein).
+        map.addSource('lights', { type: 'geojson', data: empty, buffer: 16, tolerance: 0 });
+        // unter die Straßennamen, damit sie lesbar bleiben
+        const labelLayer = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
+        map.addLayer({
+          id: 'lights-heat',
+          type: 'heatmap',
+          source: 'lights',
+          maxzoom: 18,
+          paint: {
+            'heatmap-weight': 1,
+            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.08, 12, 0.35, 15, 1],
+            'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 2, 12, 5, 15, 14, 17, 30],
+            'heatmap-color': [
+              'interpolate',
+              ['linear'],
+              ['heatmap-density'],
+              0, 'rgba(255,170,60,0)',
+              0.15, 'rgba(255,160,50,0.25)',
+              0.4, 'rgba(255,185,80,0.55)',
+              0.7, 'rgba(255,210,120,0.8)',
+              1, 'rgba(255,236,190,0.95)',
+            ],
+            'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0.9, 16, 0.45, 17.5, 0.15],
+          },
+        }, labelLayer);
         map.addLayer({
           id: 'lights-glow',
-          type: 'line',
+          type: 'circle',
           source: 'lights',
           minzoom: 14,
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
-            'line-color': '#ffc764',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 14, 6, 17, 22],
-            'line-blur': ['interpolate', ['linear'], ['zoom'], 14, 4, 17, 14],
-            'line-opacity': ['*', 0.4, ['get', 's']],
+            'circle-color': '#ffb84d',
+            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 14, 3, 17, 16, 19, 40],
+            'circle-blur': 1,
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15.5, 0.35],
           },
-        });
+        }, labelLayer);
         map.addLayer({
           id: 'lights-core',
-          type: 'line',
+          type: 'circle',
           source: 'lights',
           minzoom: 14,
-          layout: { 'line-cap': 'round' },
-          paint: { 'line-color': '#ffe2a8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2], 'line-opacity': ['*', 0.75, ['get', 's']] },
-        });
+          paint: {
+            'circle-color': '#fff1c9',
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2.5, 19, 4],
+            'circle-blur': 0.3,
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, 0.95],
+          },
+        }, labelLayer);
         let lightJob = 0;
         updateLights.current = () => {
           const src = map.getSource('lights') as GeoJSONSource | undefined;
           const fn = lightRef.current;
           if (!src) return;
-          if (!fn || map.getZoom() < 14) return src.setData(empty);
-          const b = map.getBounds();
           const job = ++lightJob;
-          void fn([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]).then((lines) => {
+          if (!fn) return src.setData(empty);
+          void fn().then((pts) => {
             if (job !== lightJob) return;
-            src.setData({
-              type: 'FeatureCollection',
-              features: lines.map((l) => ({ type: 'Feature' as const, properties: { s: Math.round(l.strength * 100) / 100 }, geometry: { type: 'LineString' as const, coordinates: l.coords } })),
-            });
+            src.setData(
+              pts
+                ? { type: 'FeatureCollection', features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })) }
+                : empty,
+            );
           });
         };
-        map.on('moveend', () => updateLights.current());
         updateLights.current();
 
         for (const id of ['other', 'chosen'] as const) map.addSource(`route-${id}`, { type: 'geojson', data: empty });

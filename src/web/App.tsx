@@ -136,22 +136,8 @@ export function App() {
 
   // Licht-Ansicht: nachts zeigt die Karte, welche Wege laut Daten beleuchtet sind
   const showLights = dark && settings.nightLights !== false && !!planner;
-  const lightSource = useMemo(
-    () =>
-      showLights && planner
-        ? async (box: [number, number, number, number]) => {
-            await planner.ensureDistricts(
-              [
-                [box[0], box[1]],
-                [box[2], box[3]],
-              ],
-              0,
-            );
-            return planner.graph.litLines(box);
-          }
-        : null,
-    [showLights, planner],
-  );
+  // Laternen der gewählten Stadt (eine Datei pro Stadt, wird erst nachts geladen)
+  const lightSource = useMemo(() => (showLights && planner ? () => planner.lights(city) : null), [showLights, planner, city]);
 
   useEffect(() => {
     map.current?.setPoints(start?.coords ?? null, end?.coords ?? null);
