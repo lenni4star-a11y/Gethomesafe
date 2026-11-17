@@ -68,6 +68,9 @@ export function App() {
   const [flying, setFlying] = useState(false);
   const [photos, setPhotos] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  /** kleiner Dialog „Wo wohnst du?“ (statt der ganzen Einstellungen), danach direkt nach Hause */
+  const [askHome, setAskHome] = useState(false);
+  const pickHomeFromAsk = useRef(false);
   /** Routen-Menü: eingeklappt, halb oder ganz offen */
   const [sheet, setSheet] = useState<SheetState>('collapsed');
   const [escortCompact, setEscortCompact] = useState(true);
@@ -189,7 +192,7 @@ export function App() {
     setBusy(true);
     setMessage(null);
     planner
-      .plan(start.coords, end.coords, when, { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings })
+      .plan(start.coords, end.coords, when, { parkAvoidance: 2, crimeData: true, ratings })
       .then((res) => {
         if (cancelled) return;
         if (!res) setMessage('Für diese Strecke haben wir leider keinen Fußweg gefunden.');
@@ -211,7 +214,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [planner, start, end, customTime, settings.parkAvoidance, ratings, city]);
+  }, [planner, start, end, customTime, ratings, city]);
 
   // Bewertungen auf der Karte, gefiltert nach Wochentag und Uhrzeit
   const ratingTime = customTime ?? new Date();
@@ -305,8 +308,13 @@ export function App() {
       setSheet('collapsed');
       if (pick === 'home') {
         setPick(null);
-        setHome({ label: 'Punkt auf der Karte', coords: p, kind: 'home' });
-        setShowSettings(true);
+        const place: Place = { label: 'Punkt auf der Karte', coords: p, kind: 'home' };
+        setHome(place);
+        if (pickHomeFromAsk.current) {
+          pickHomeFromAsk.current = false;
+          setEnd({ ...place, label: 'Zuhause' });
+          if (!start) locate();
+        } else setShowSettings(true);
         return;
       }
       if (pick === 'rate') {
@@ -319,13 +327,13 @@ export function App() {
       else setEnd(place);
       setPick(null);
     },
-    [pick, rateAt, streetMode],
+    [pick, rateAt, streetMode, start, locate],
   );
 
   /** Sofort die sicherste Route nach Hause planen */
   const goHome = useCallback(() => {
     if (!home) {
-      setShowSettings(true);
+      setAskHome(true);
       return;
     }
     setEnd({ ...home, label: 'Zuhause', kind: 'home' });
@@ -464,7 +472,7 @@ export function App() {
           onReroute={async () => {
             const s = escort.session;
             if (!planner || !s?.destCoords || !escort.lastPos) return;
-            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: settings.parkAvoidance, crimeData: true, ratings });
+            const res = await planner.plan(escort.lastPos.coords, s.destCoords, new Date(), { parkAvoidance: 2, crimeData: true, ratings });
             if (!res) return;
             setPlan(res);
             setSelected('safest');
@@ -531,7 +539,7 @@ export function App() {
             <div className="notice home-prompt">
               <b>Zuhause festlegen?</b> Dann geht der Heimweg mit einem Tipp.
               <div className="tp-row">
-                <button type="button" className="chip active" onClick={() => (setHomePromptDone(true), setShowSettings(true))}>
+                <button type="button" className="chip active" onClick={() => (setHomePromptDone(true), setAskHome(true))}>
                   Festlegen
                 </button>
                 <button type="button" className="chip" onClick={() => setHomePromptDone(true)}>
@@ -705,6 +713,35 @@ export function App() {
             rateAt(coords, photo);
           }}
         />
+      )}
+
+      {askHome && (
+        <Modal title="Wo wohnst du?" onClose={() => setAskHome(false)}>
+          <section className="settings-section">
+            <PlaceInput
+              label="Adresse suchen"
+              value={null}
+              onChange={(p) => {
+                if (!p) return;
+                const place: Place = { ...p, kind: 'home' };
+                setHome(place);
+                setAskHome(false);
+                setEnd({ ...place, label: 'Zuhause' });
+                if (!start) locate();
+              }}
+              bbox={bbox}
+              onLocate={() => locate((p) => (setHome({ ...p, label: 'Mein Standort (beim Speichern)', kind: 'home' }), setAskHome(false)))}
+              onPickOnMap={() => {
+                pickHomeFromAsk.current = true;
+                setAskHome(false);
+                setPick('home');
+                setSheet('collapsed');
+              }}
+              picking={false}
+            />
+            <p className="fineprint">Bleibt nur auf diesem Gerät. Ändern oder löschen in den Einstellungen.</p>
+          </section>
+        </Modal>
       )}
 
       {showSettings && (

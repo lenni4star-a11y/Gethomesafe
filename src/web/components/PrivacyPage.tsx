@@ -16,7 +16,7 @@ export function PrivacyPage({ onClose, onDeleteAll }: Props) {
 
         <h3>Was auf deinem Handy gespeichert wird</h3>
         <ul>
-          <li>Einstellungen (z. B. Parks meiden, Stimme, Begleitmodus)</li>
+          <li>Einstellungen (z. B. Kartenstil, Begleitmodus)</li>
           <li>Zuhause und Lieblingsorte</li>
           <li>Notfallkontakte (Name und Telefonnummer)</li>
           <li>Deine Bewertungen</li>
