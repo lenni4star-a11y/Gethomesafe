@@ -17,6 +17,8 @@ const HINT_LABEL: Record<Hint['kind'], string> = {
   tunnel: 'Unterführung',
   steps: 'Stiege',
   track: 'Feldweg',
+  zone: 'amtliche Zone',
+  report: 'Bericht über einen Vorfall',
 };
 
 const CLASS_LABEL = { good: 'gut', medium: 'mittel', bad: 'schlecht' } as const;
@@ -32,7 +34,10 @@ export function RouteOverview({ route, onFocus }: Props) {
 
   const parts = route.segments.map((s) => ({ cls: s.cls, len: lineLength(s.coords) }));
   const total = parts.reduce((a, p) => a + p.len, 0) || 1;
-  const hints = route.hints.filter((h) => h.kind !== 'park' || route.dark);
+  // Zonen und Vorfälle zuerst, dann die übrigen Stellen
+  const isZone = (h: Hint) => h.kind === 'zone' || h.kind === 'report';
+  const all = route.hints.filter((h) => h.kind !== 'park' || route.dark);
+  const hints = [...all.filter(isZone), ...all.filter((h) => !isZone(h))];
   const groups = PLACE_ORDER.map((cat) => ({ cat, n: route.openPlaces.filter((p) => p.cat === cat).length })).filter((g) => g.n);
 
   return (
@@ -70,14 +75,14 @@ export function RouteOverview({ route, onFocus }: Props) {
         </li>
         {hints.length > 0 ? (
           hints.slice(0, 4).map((h, i) => (
-            <li key={i}>
+            <li key={i} className={isZone(h) ? 'ov-zone' : undefined}>
               <button type="button" className="link-btn ov-hint" onClick={() => onFocus(h.at)}>
-                nach {formatDistance(h.offset)}: {HINT_LABEL[h.kind]} ({formatDistance(h.length)})
+                nach {formatDistance(h.offset)}: {isZone(h) ? h.text : `${HINT_LABEL[h.kind]} (${formatDistance(h.length)})`}
               </button>
             </li>
           ))
         ) : (
-          <li>Keine Unterführungen, Stiegen oder dunklen Stücke.</li>
+          <li>Keine Unterführungen, Stiegen, dunklen Stücke oder amtlichen Zonen.</li>
         )}
         {hints.length > 4 && <li className="muted">und {hints.length - 4} weitere Stellen (siehe Details)</li>}
         <li>
