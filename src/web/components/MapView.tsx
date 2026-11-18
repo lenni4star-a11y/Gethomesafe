@@ -127,7 +127,10 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
         map.addSource('lights-cells', { type: 'geojson', data: empty, tolerance: 0 });
         map.addSource('lights', { type: 'geojson', data: empty, tolerance: 0 });
         // unter die Straßennamen, damit sie lesbar bleiben
-        const labelLayer = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
+        // über Straßen und Flächen, aber unter die Beschriftungen (erste Schrift-Ebene nach der letzten Nicht-Schrift-Ebene)
+        const styleLayers = map.getStyle().layers ?? [];
+        const lastShape = styleLayers.reduce((last, l, i) => (l.type !== 'symbol' ? i : last), -1);
+        const labelLayer = styleLayers.slice(lastShape + 1).find((l) => l.type === 'symbol')?.id;
         // Stufen: Stadt (Zoom ≤ 11) feines Leuchten entlang der Straßen · Viertel (12–13) Leuchten wird dünner,
         // erste Lichtpunkte · Straße (≥ 14) nur noch einzelne Laternen mit kleinem Schein.
         map.addLayer(
