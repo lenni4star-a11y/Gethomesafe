@@ -46,7 +46,7 @@ import { RouteOverview } from './components/RouteOverview';
 import { FeelMeter, RidePanel, rideMinutes, ScooterPanel, scooterMinutes, type TravelMode } from './components/TravelModes';
 import { emergencyText, mainEmergency } from '../core/helplines';
 import { setCurrentCity } from './region';
-import { rememberCityCenter } from './mapStyle';
+import { getMapStyle, rememberCityCenter } from './mapStyle';
 
 type Pick = 'start' | 'end' | 'rate' | 'home' | null;
 type SheetState = 'collapsed' | 'half' | 'full';
@@ -130,7 +130,17 @@ export function App() {
     setMessage(null);
   };
 
+  // jede Minute neu rechnen, damit Lichter und Kartenstil bei Sonnenuntergang/-aufgang von selbst wechseln
+  const [, setMinuteTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setMinuteTick((t) => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
   const time = customTime ?? new Date();
+  const cityLat = (cityInfo.bbox[1] + cityInfo.bbox[3]) / 2;
+  const cityLon = (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2;
+  // Kartenstil „automatisch“: richtet sich nach der echten Uhrzeit in der gewählten Stadt (Wien ↔ San Francisco ohne Neuladen)
+  const mapDark = getMapStyle() === 'auto' ? isDark(new Date(), cityLat, cityLon) : undefined;
   // hell/dunkel für die Mitte der gewählten Stadt (Berlin und Wien unterscheiden sich um bis zu eine halbe Stunde)
   const dark = isDark(time, (cityInfo.bbox[1] + cityInfo.bbox[3]) / 2, (cityInfo.bbox[0] + cityInfo.bbox[2]) / 2);
 
@@ -366,7 +376,7 @@ export function App() {
 
   return (
     <div className="app">
-      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} lightSource={lightSource} />
+      <MapView ref={map} index={planner?.index ?? null} city={cityInfo.id} onMapClick={onMapClick} lightSource={lightSource} darkMap={mapDark} />
 
       <header className="topbar">
         <Wordmark />

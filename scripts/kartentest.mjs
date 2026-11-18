@@ -14,7 +14,6 @@ const CITIES = [
   ['muenchen', [11.576, 48.137]],
   ['koeln', [6.958, 50.94]],
   ['frankfurt', [8.682, 50.111]],
-  ['sanfrancisco', [-122.42, 37.775]],
 ];
 const ZOOMS = [10.5, 12, 13.5, 15, 16.5];
 
@@ -48,4 +47,32 @@ for (const [city, center] of CITIES) {
     console.log('Foto', city, z);
   }
 }
+// Stilwechsel ohne Neuladen: um 23:30 Wiener Zeit ist in San Francisco Nachmittag → helle Karte, keine Lichter
+const styleName = () => page.evaluate(() => window.__gwMap.getStyle().name);
+const SF = [-122.42, 37.775];
+await page.selectOption('.city-pick-select', 'sanfrancisco');
+await page.waitForTimeout(8000);
+await page.evaluate((c) => { window.__gwMap.jumpTo({ center: c, zoom: 12 }); }, SF);
+await page.waitForTimeout(3000);
+console.log('Stil San Francisco (Tag):', await styleName());
+await page.screenshot({ path: `${OUT}/stil-sanfrancisco-tag.png`, timeout: 60000 }).catch(() => {});
+// eine Stunde später in San Francisco Nacht: Uhr vorstellen, auf den Minutentakt der App warten
+await page.clock.setFixedTime(new Date('2026-11-18T08:30:00+01:00'));
+await page.waitForTimeout(65000);
+console.log('Stil San Francisco (Nacht):', await styleName());
+await page
+  .waitForFunction(() => (window.__gwMap.getSource('lights-cells')?._data?.features?.length ?? 0) > 100, null, { timeout: 25000 })
+  .catch(() => console.log('keine Lichtpunkte für sanfrancisco'));
+for (const z of ZOOMS) {
+  await page.evaluate(([c, zz]) => { window.__gwMap.jumpTo({ center: c, zoom: zz }); }, [SF, z]);
+  await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${OUT}/sanfrancisco-z${String(z).replace('.', '_')}.png`, timeout: 60000 }).catch(() => {});
+}
+// zurück nach Wien: dort ist es um 8:30 Tag → helle Karte
+await page.selectOption('.city-pick-select', 'wien');
+await page.waitForTimeout(8000);
+console.log('Stil Wien (Tag):', await styleName());
+await page.screenshot({ path: `${OUT}/stil-wien-tag.png`, timeout: 60000 }).catch(() => {});
+
 await browser.close();

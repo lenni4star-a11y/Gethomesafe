@@ -11,10 +11,12 @@ import { textOn } from './Icon';
 import { ICON_FOR, svgIcon } from '../placeIcons';
 import { cityOf, type DataIndex, type LngLat, type Poi } from '../../core/types';
 import { placeKindLabel, placeName } from '../places';
-import { mapStyleUrl } from '../mapStyle';
+import { mapStyleUrl, styleUrlFor } from '../mapStyle';
 
 // Freier Kartenstil von OpenFreeMap (kein Account, keine Nutzungsgrenze für faire Nutzung)
 const STYLE_URL = mapStyleUrl();
+/** eigene Ebenen bleiben beim Wechsel hell/dunkel erhalten; Licht-Ebenen unter die Schrift */
+const isLightLayer = (id: string) => id.startsWith('lights');
 
 /** Farbstufen: grün = gut, gelb = mäßig / keine Daten, rot = schlecht */
 export const CLASS_COLORS = { good: '#4fd18b', medium: '#ffd166', bad: '#ff5c7a' };
@@ -48,16 +50,21 @@ interface Props {
   city?: string;
   onMapClick: (p: LngLat) => void;
   /** Licht-Ansicht nachts: liefert beleuchtete Wege im Ausschnitt; fehlt sie, ist die Ansicht aus */
+  /** Kartenstil „automatisch“: true = dunkel, false = hell; undefined = feste Wahl der Nutzer·in */
+  darkMap?: boolean;
   /** Laternen-Standorte der Stadt (nur nachts gesetzt) */
   lightSource?: (() => Promise<LngLat[] | null>) | null;
 }
 
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, city = 'wien', onMapClick, lightSource = null }, ref) {
+export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, city = 'wien', onMapClick, lightSource = null, darkMap }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const ready = useRef<Promise<void>>();
+  const styleUrl = useRef(STYLE_URL);
+  const baseSources = useRef<Set<string>>(new Set());
+  const baseLayers = useRef<Set<string>>(new Set());
   const markers = useRef<{ start?: maplibregl.Marker; end?: maplibregl.Marker }>({});
   const placeMarkers = useRef<maplibregl.Marker[]>([]);
   const homeMarker = useRef<maplibregl.Marker>();
@@ -74,6 +81,39 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
   useEffect(() => {
     void ready.current?.then(() => updateLights.current());
   }, [lightSource]);
+
+  // hell/dunkel automatisch wechseln (Stadtwechsel, Sonnenuntergang) ohne Neuladen; Routen, Lichter usw. bleiben
+  useEffect(() => {
+    if (darkMap === undefined) return;
+    const url = styleUrlFor(darkMap);
+    void ready.current?.then(() => {
+      const map = mapRef.current;
+      if (!map || styleUrl.current === url) return;
+      styleUrl.current = url;
+      map.setStyle(url, {
+        transformStyle: (prev, next) => {
+          if (!prev) return next;
+          const ownSources = Object.fromEntries(Object.entries(prev.sources).filter(([id]) => !baseSources.current.has(id)));
+          const ownLayers = prev.layers.filter((l) => !baseLayers.current.has(l.id));
+          baseSources.current = new Set(Object.keys(next.sources));
+          baseLayers.current = new Set(next.layers.map((l) => l.id));
+          const lastShape = next.layers.reduce((last, l, i) => (l.type !== 'symbol' ? i : last), -1);
+          const labelIdx = next.layers.findIndex((l, i) => i > lastShape && l.type === 'symbol');
+          const cut = labelIdx < 0 ? next.layers.length : labelIdx;
+          return {
+            ...next,
+            sources: { ...next.sources, ...ownSources },
+            layers: [
+              ...next.layers.slice(0, cut),
+              ...ownLayers.filter((l) => isLightLayer(l.id)),
+              ...next.layers.slice(cut),
+              ...ownLayers.filter((l) => !isLightLayer(l.id)),
+            ],
+          };
+        },
+      });
+    });
+  }, [darkMap]);
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -117,6 +157,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
 
     ready.current = new Promise((resolve) => {
       map.on('load', () => {
+        // was zum Grundkarten-Stil gehört (alles andere sind eigene Ebenen, die einen Stilwechsel überleben)
+        baseSources.current = new Set(Object.keys(map.getStyle().sources ?? {}));
+        baseLayers.current = new Set((map.getStyle().layers ?? []).map((l) => l.id));
 
         map.addSource('area', { type: 'geojson', data: empty });
         // Bezirksgrenzen werden bewusst nicht gezeichnet (schlichte Karte)
