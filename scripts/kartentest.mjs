@@ -19,7 +19,7 @@ const CITIES = [
 const ZOOMS = [10.5, 12, 13.5, 15, 16.5];
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 page.on('console', (m) => m.type() === 'error' && console.log('Konsole:', m.text()));
 await page.clock.setFixedTime(new Date('2026-11-18T23:30:00+01:00'));
 console.log('öffne', BASE);
@@ -36,15 +36,16 @@ for (const [city, center] of CITIES) {
   await page.waitForTimeout(1500);
   // warten, bis die Lichtpunkte geladen sind
   await page
-    .waitForFunction(() => (window.__gwMap.getSource('lights')?._data?.features?.length ?? 0) > 1000, null, { timeout: 25000 })
+    .waitForFunction(() => (window.__gwMap.getSource('lights-cells')?._data?.features?.length ?? 0) > 100, null, { timeout: 25000 })
     .catch(() => console.log('keine Lichtpunkte für', city));
-  const n = await page.evaluate(() => window.__gwMap.getSource('lights')?._data?.features?.length ?? 0);
-  console.log(city, 'Lichtpunkte:', n);
+  const n = await page.evaluate(() => window.__gwMap.getSource('lights-cells')?._data?.features?.length ?? 0);
+  console.log(city, 'Felder:', n);
   for (const z of ZOOMS) {
     await page.evaluate(([c, zz]) => window.__gwMap.jumpTo({ center: c, zoom: zz }), [center, z]);
     await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(1500);
-    await page.screenshot({ path: `${OUT}/${city}-z${String(z).replace('.', '_')}.png` });
+    await page.screenshot({ path: `${OUT}/${city}-z${String(z).replace('.', '_')}.png`, timeout: 60000 }).catch((e) => console.log('Foto', city, z, e.message));
+    console.log('Foto', city, z);
   }
 }
 await browser.close();

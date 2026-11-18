@@ -8,6 +8,9 @@ on:
       - 'scripts/kartentest.mjs'
       - '.github/workflows/kartentest.yml'
 
+permissions:
+  contents: write
+
 jobs:
   fotos:
     runs-on: ubuntu-latest
@@ -36,3 +39,13 @@ jobs:
           path: |
             kartentest/
             public/data/lichter-wien.json
+      - name: Fotos in den Zweig kartentest-fotos legen
+        if: always()
+        run: |
+          cp public/data/lichter-wien.json kartentest/ || true
+          cd kartentest
+          git init -q
+          git checkout -q -b kartentest-fotos
+          git add .
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Kartentest ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" kartentest-fotos

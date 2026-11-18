@@ -1,3 +1,4 @@
+import { aggregateLights, lightsInBox } from '../../core/lights';
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
@@ -122,7 +123,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
 
         // Licht-Ansicht (nur nachts, unter den Routen): von weit weg ein warmes Lichtermeer (Heatmap),
         // beim Hineinzoomen löst es sich in die einzelnen Laternen auf (Lichtpunkte mit Schein).
-        map.addSource('lights', { type: 'geojson', data: empty, buffer: 16, tolerance: 0 });
+        // zwei Quellen: zusammengefasste Felder (weit weg) und einzelne Laternen im Ausschnitt (nah)
+        map.addSource('lights-cells', { type: 'geojson', data: empty, tolerance: 0 });
+        map.addSource('lights', { type: 'geojson', data: empty, tolerance: 0 });
         // unter die Straßennamen, damit sie lesbar bleiben
         const labelLayer = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
         // Stufen: Stadt (Zoom ≤ 11) feines Leuchten entlang der Straßen · Viertel (12–13) Leuchten wird dünner,
@@ -131,12 +134,12 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
           {
             id: 'lights-heat',
             type: 'heatmap',
-            source: 'lights',
+            source: 'lights-cells',
             maxzoom: 15.5,
             paint: {
-              'heatmap-weight': 1,
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.03, 11, 0.06, 13, 0.12, 15, 0.25],
-              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 9, 1, 11, 1.6, 12, 2.2, 13, 3, 14, 4, 15, 5],
+              'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 0, 0, 3, 0.4, 12, 1],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.35, 11, 0.5, 13, 0.8, 15, 1],
+              'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 1.5, 11, 3, 12, 4.5, 13, 7, 14, 11, 15, 16],
               'heatmap-color': [
                 'interpolate',
                 ['linear'],
@@ -183,21 +186,47 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
           labelLayer,
         );
         let lightJob = 0;
-        updateLights.current = () => {
+        let allLights: LngLat[] | null = null;
+        const pointFC = (pts: LngLat[]) => ({
+          type: 'FeatureCollection' as const,
+          features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
+        });
+        // einzelne Laternen nur im sichtbaren Ausschnitt und erst ab Zoom 12,5 – das hält die Karte auch auf älteren Handys flüssig
+        const updateNear = () => {
           const src = map.getSource('lights') as GeoJSONSource | undefined;
-          const fn = lightRef.current;
           if (!src) return;
+          if (!allLights || map.getZoom() < 12.5) return src.setData(empty);
+          const b = map.getBounds();
+          const pad = 0.2;
+          const w = b.getEast() - b.getWest();
+          const h = b.getNorth() - b.getSouth();
+          src.setData(pointFC(lightsInBox(allLights, [b.getWest() - w * pad, b.getSouth() - h * pad, b.getEast() + w * pad, b.getNorth() + h * pad])));
+        };
+        updateLights.current = () => {
+          const cells = map.getSource('lights-cells') as GeoJSONSource | undefined;
+          const fn = lightRef.current;
+          if (!cells) return;
           const job = ++lightJob;
-          if (!fn) return src.setData(empty);
+          if (!fn) {
+            allLights = null;
+            cells.setData(empty);
+            return updateNear();
+          }
           void fn().then((pts) => {
             if (job !== lightJob) return;
-            src.setData(
+            allLights = pts;
+            cells.setData(
               pts
-                ? { type: 'FeatureCollection', features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })) }
+                ? {
+                    type: 'FeatureCollection',
+                    features: aggregateLights(pts, 100).map((c) => ({ type: 'Feature' as const, properties: { n: c.n }, geometry: { type: 'Point' as const, coordinates: c.at } })),
+                  }
                 : empty,
             );
+            updateNear();
           });
         };
+        map.on('moveend', updateNear);
         updateLights.current();
 
         for (const id of ['other', 'chosen'] as const) map.addSource(`route-${id}`, { type: 'geojson', data: empty });
