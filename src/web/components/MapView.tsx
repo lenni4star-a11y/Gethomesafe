@@ -138,8 +138,8 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             maxzoom: 15.5,
             paint: {
               'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 0, 0, 3, 0.4, 12, 1],
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.35, 11, 0.5, 13, 0.8, 15, 1],
-              'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 1.5, 11, 3, 12, 4.5, 13, 7, 14, 11, 15, 16],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.25, 11, 0.35, 12, 0.45, 13, 0.6, 15, 0.9],
+              'heatmap-radius': ['interpolate', ['exponential', 1.6], ['zoom'], 9, 3, 11, 6, 12, 9, 13, 13, 14, 18, 15, 24],
               'heatmap-color': [
                 'interpolate',
                 ['linear'],

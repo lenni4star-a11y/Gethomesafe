@@ -41,7 +41,7 @@ for (const [city, center] of CITIES) {
   const n = await page.evaluate(() => window.__gwMap.getSource('lights-cells')?._data?.features?.length ?? 0);
   console.log(city, 'Felder:', n);
   for (const z of ZOOMS) {
-    await page.evaluate(([c, zz]) => window.__gwMap.jumpTo({ center: c, zoom: zz }), [center, z]);
+    await page.evaluate(([c, zz]) => { window.__gwMap.jumpTo({ center: c, zoom: zz }); }, [center, z]);
     await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/${city}-z${String(z).replace('.', '_')}.png`, timeout: 60000 }).catch((e) => console.log('Foto', city, z, e.message));
