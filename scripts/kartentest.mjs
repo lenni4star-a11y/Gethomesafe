@@ -48,7 +48,7 @@ for (const [city, center] of CITIES) {
   }
 }
 // Stilwechsel ohne Neuladen: um 23:30 Wiener Zeit ist in San Francisco Nachmittag → helle Karte, keine Lichter
-const styleName = () => page.evaluate(() => window.__gwMap.getStyle().name);
+const styleName = () => page.evaluate(() => (window.__gwMap.getStyle().sprite + '').replace(/.*sprites?\/(ofm_f384\/)?/, '') || '?');
 const SF = [-122.42, 37.775];
 await page.selectOption('.city-pick-select', 'sanfrancisco');
 await page.waitForTimeout(8000);
