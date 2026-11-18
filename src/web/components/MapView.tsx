@@ -141,7 +141,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             maxzoom: 15.5,
             paint: {
               'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 0, 0, 3, 0.4, 12, 1],
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.2, 10.5, 0.3, 12, 0.55, 13, 0.8, 14, 1],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.35, 10.5, 0.45, 12, 0.55, 13, 0.8, 14, 1],
               'heatmap-radius': ['interpolate', ['exponential', 1.6], ['zoom'], 9, 2.5, 10.5, 4, 12, 8, 13, 12, 14, 16, 15, 22],
               'heatmap-color': [
                 'interpolate',
@@ -154,7 +154,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
                 0.85, 'rgba(255,225,150,0.92)',
                 1, 'rgba(255,245,210,1)',
               ],
-              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.35, 12, 0.6, 13, 0.75, 14, 0.45, 15.5, 0],
+              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.75, 12, 0.7, 13, 0.75, 14, 0.45, 15.5, 0],
             },
           },
           labelLayer,
@@ -168,7 +168,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             maxzoom: 13,
             paint: {
               'circle-color': ['interpolate', ['linear'], ['get', 'n'], 1, '#ffa94d', 6, '#ffd27a', 15, '#fff2cf'],
-              'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 0.8, 11, 1.4, 12, 2, 13, 2.6],
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 1.1, 11, 1.7, 12, 2.1, 13, 2.6],
               'circle-blur': 0.35,
               'circle-opacity': [
                 '*',
