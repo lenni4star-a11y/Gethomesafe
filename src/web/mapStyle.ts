@@ -54,6 +54,11 @@ export function darkNow(date = new Date()): boolean {
   return isDark(date, lat, lon);
 }
 
+/** Stil-Adresse für hell bzw. dunkel */
+export function styleUrlFor(dark: boolean): string {
+  return dark ? URLS.dunkel : URLS.hell;
+}
+
 export function mapStyleUrl(): string {
   const c = getMapStyle();
   if (c === 'auto') return darkNow() ? URLS.dunkel : URLS.hell;
