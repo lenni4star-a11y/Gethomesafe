@@ -1,3 +1,4 @@
+import { aggregateLights, lightsInBox } from '../../core/lights';
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
@@ -111,6 +112,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
       clickRef.current([e.lngLat.lng, e.lngLat.lat]);
     });
 
+    // für automatische Testfotos (?kartentest): Karte von außen steuerbar
+    if (location.search.includes('kartentest')) (window as unknown as { __gwMap: maplibregl.Map }).__gwMap = map;
+
     ready.current = new Promise((resolve) => {
       map.on('load', () => {
 
@@ -119,71 +123,134 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
 
         // Licht-Ansicht (nur nachts, unter den Routen): von weit weg ein warmes Lichtermeer (Heatmap),
         // beim Hineinzoomen löst es sich in die einzelnen Laternen auf (Lichtpunkte mit Schein).
-        map.addSource('lights', { type: 'geojson', data: empty, buffer: 16, tolerance: 0 });
+        // zwei Quellen: zusammengefasste Felder (weit weg) und einzelne Laternen im Ausschnitt (nah)
+        map.addSource('lights-cells', { type: 'geojson', data: empty, tolerance: 0 });
+        map.addSource('lights', { type: 'geojson', data: empty, tolerance: 0 });
         // unter die Straßennamen, damit sie lesbar bleiben
-        const labelLayer = map.getStyle().layers?.find((l) => l.type === 'symbol')?.id;
-        map.addLayer({
-          id: 'lights-heat',
-          type: 'heatmap',
-          source: 'lights',
-          maxzoom: 18,
-          paint: {
-            'heatmap-weight': 1,
-            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.08, 12, 0.35, 15, 1],
-            'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 2, 12, 5, 15, 14, 17, 30],
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0, 'rgba(255,170,60,0)',
-              0.15, 'rgba(255,160,50,0.25)',
-              0.4, 'rgba(255,185,80,0.55)',
-              0.7, 'rgba(255,210,120,0.8)',
-              1, 'rgba(255,236,190,0.95)',
-            ],
-            'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0.9, 16, 0.45, 17.5, 0.15],
+        // über Straßen und Flächen, aber unter die Beschriftungen (erste Schrift-Ebene nach der letzten Nicht-Schrift-Ebene)
+        const styleLayers = map.getStyle().layers ?? [];
+        const lastShape = styleLayers.reduce((last, l, i) => (l.type !== 'symbol' ? i : last), -1);
+        const labelLayer = styleLayers.slice(lastShape + 1).find((l) => l.type === 'symbol')?.id;
+        // Stufen: Stadt (Zoom ≤ 11) feines Leuchten entlang der Straßen · Viertel (12–13) Leuchten wird dünner,
+        // erste Lichtpunkte · Straße (≥ 14) nur noch einzelne Laternen mit kleinem Schein.
+        map.addLayer(
+          {
+            id: 'lights-heat',
+            type: 'heatmap',
+            source: 'lights-cells',
+            maxzoom: 15.5,
+            paint: {
+              'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 0, 0, 3, 0.4, 12, 1],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.35, 10.5, 0.45, 12, 0.55, 13, 0.8, 14, 1],
+              'heatmap-radius': ['interpolate', ['exponential', 1.6], ['zoom'], 9, 2.5, 10.5, 4, 12, 8, 13, 12, 14, 16, 15, 22],
+              'heatmap-color': [
+                'interpolate',
+                ['linear'],
+                ['heatmap-density'],
+                0, 'rgba(255,150,40,0)',
+                0.1, 'rgba(255,150,40,0.15)',
+                0.3, 'rgba(240,145,45,0.55)',
+                0.6, 'rgba(255,190,90,0.8)',
+                0.85, 'rgba(255,225,150,0.92)',
+                1, 'rgba(255,245,210,1)',
+              ],
+              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.75, 12, 0.7, 13, 0.75, 14, 0.45, 15.5, 0],
+            },
           },
-        }, labelLayer);
-        map.addLayer({
-          id: 'lights-glow',
-          type: 'circle',
-          source: 'lights',
-          minzoom: 14,
-          paint: {
-            'circle-color': '#ffb84d',
-            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 14, 3, 17, 16, 19, 40],
-            'circle-blur': 1,
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15.5, 0.35],
+          labelLayer,
+        );
+        // Fernsicht wie ein Nachtfoto aus dem All: helle Punkte je Feld, je mehr Laternen, desto heller
+        map.addLayer(
+          {
+            id: 'lights-cells-dot',
+            type: 'circle',
+            source: 'lights-cells',
+            maxzoom: 13,
+            paint: {
+              'circle-color': ['interpolate', ['linear'], ['get', 'n'], 1, '#ffa94d', 6, '#ffd27a', 15, '#fff2cf'],
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 1.1, 11, 1.7, 12, 2.1, 13, 2.6],
+              'circle-blur': 0.35,
+              'circle-opacity': [
+                '*',
+                ['interpolate', ['linear'], ['get', 'n'], 1, 0.45, 5, 0.85, 12, 1],
+                ['interpolate', ['linear'], ['zoom'], 11.5, 1, 13, 0],
+              ],
+            },
           },
-        }, labelLayer);
-        map.addLayer({
-          id: 'lights-core',
-          type: 'circle',
-          source: 'lights',
-          minzoom: 14,
-          paint: {
-            'circle-color': '#fff1c9',
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2.5, 19, 4],
-            'circle-blur': 0.3,
-            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, 0.95],
+          labelLayer,
+        );
+        map.addLayer(
+          {
+            id: 'lights-glow',
+            type: 'circle',
+            source: 'lights',
+            minzoom: 12,
+            paint: {
+              'circle-color': '#ffb24a',
+              'circle-radius': ['interpolate', ['exponential', 1.8], ['zoom'], 12, 1.5, 15, 6, 17, 18, 19, 40],
+              'circle-blur': 1,
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.1, 14, 0.35, 16, 0.45],
+            },
           },
-        }, labelLayer);
+          labelLayer,
+        );
+        map.addLayer(
+          {
+            id: 'lights-core',
+            type: 'circle',
+            source: 'lights',
+            minzoom: 12,
+            paint: {
+              'circle-color': '#ffe9b8',
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 0.6, 14, 1.2, 16, 2, 19, 4],
+              'circle-blur': 0.2,
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 13.5, 0.9, 15, 1],
+            },
+          },
+          labelLayer,
+        );
         let lightJob = 0;
-        updateLights.current = () => {
+        let allLights: LngLat[] | null = null;
+        const pointFC = (pts: LngLat[]) => ({
+          type: 'FeatureCollection' as const,
+          features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
+        });
+        // einzelne Laternen nur im sichtbaren Ausschnitt und erst ab Zoom 12 – das hält die Karte auch auf älteren Handys flüssig
+        const updateNear = () => {
           const src = map.getSource('lights') as GeoJSONSource | undefined;
-          const fn = lightRef.current;
           if (!src) return;
+          if (!allLights || map.getZoom() < 12) return src.setData(empty);
+          const b = map.getBounds();
+          const pad = 0.2;
+          const w = b.getEast() - b.getWest();
+          const h = b.getNorth() - b.getSouth();
+          src.setData(pointFC(lightsInBox(allLights, [b.getWest() - w * pad, b.getSouth() - h * pad, b.getEast() + w * pad, b.getNorth() + h * pad])));
+        };
+        updateLights.current = () => {
+          const cells = map.getSource('lights-cells') as GeoJSONSource | undefined;
+          const fn = lightRef.current;
+          if (!cells) return;
           const job = ++lightJob;
-          if (!fn) return src.setData(empty);
+          if (!fn) {
+            allLights = null;
+            cells.setData(empty);
+            return updateNear();
+          }
           void fn().then((pts) => {
             if (job !== lightJob) return;
-            src.setData(
+            allLights = pts;
+            cells.setData(
               pts
-                ? { type: 'FeatureCollection', features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })) }
+                ? {
+                    type: 'FeatureCollection',
+                    features: aggregateLights(pts, 100).map((c) => ({ type: 'Feature' as const, properties: { n: c.n }, geometry: { type: 'Point' as const, coordinates: c.at } })),
+                  }
                 : empty,
             );
+            updateNear();
           });
         };
+        map.on('moveend', updateNear);
         updateLights.current();
 
         for (const id of ['other', 'chosen'] as const) map.addSource(`route-${id}`, { type: 'geojson', data: empty });

@@ -22,3 +22,33 @@ export function decodeLights(f: LightsFile): LngLat[] {
   }
   return out;
 }
+
+/** Für die Ansicht von weit weg: Laternen in Felder von etwa `cell` Metern zusammenfassen (Mittelpunkt und Anzahl) */
+export function aggregateLights(pts: LngLat[], cell = 100): { at: LngLat; n: number }[] {
+  if (!pts.length) return [];
+  const lat0 = pts[0][1];
+  const dy = cell / 111320;
+  const dx = cell / (111320 * Math.cos((lat0 * Math.PI) / 180));
+  const cells = new Map<string, { x: number; y: number; n: number }>();
+  for (const [x, y] of pts) {
+    const k = Math.floor(x / dx) + ':' + Math.floor(y / dy);
+    const c = cells.get(k);
+    if (c) {
+      c.x += x;
+      c.y += y;
+      c.n++;
+    } else cells.set(k, { x, y, n: 1 });
+  }
+  return [...cells.values()].map((c) => ({ at: [c.x / c.n, c.y / c.n] as LngLat, n: c.n }));
+}
+
+/** Für die Nahansicht: nur die Laternen im sichtbaren Ausschnitt (höchstens `max`) */
+export function lightsInBox(pts: LngLat[], box: [number, number, number, number], max = 30000): LngLat[] {
+  const out: LngLat[] = [];
+  for (const p of pts) {
+    if (p[0] < box[0] || p[0] > box[2] || p[1] < box[1] || p[1] > box[3]) continue;
+    out.push(p);
+    if (out.length >= max) break;
+  }
+  return out;
+}

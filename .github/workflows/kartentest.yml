@@ -1,0 +1,51 @@
+# Testfotos der Karte (Licht-Ansicht) in allen Städten – bei Änderungen an der Karte und von Hand.
+name: Kartentest
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/web/components/MapView.tsx'
+      - 'scripts/kartentest.mjs'
+      - '.github/workflows/kartentest.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fotos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lichtpunkte Wien neu (ganze Stadt)
+        run: node scripts/lichter-wien.mjs
+      - run: npm run build
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Fotos
+        timeout-minutes: 15
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          sleep 5
+          node scripts/kartentest.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kartentest
+          path: |
+            kartentest/
+            public/data/lichter-wien.json
+      - name: Fotos in den Zweig kartentest-fotos legen
+        if: always()
+        run: |
+          cp public/data/lichter-wien.json kartentest/ || true
+          cd kartentest
+          git init -q
+          git checkout -q -b kartentest-fotos
+          git add .
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Kartentest ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" kartentest-fotos
