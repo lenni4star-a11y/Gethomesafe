@@ -251,7 +251,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
               'circle-color': '#ffe9b8',
               'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 0.6, 14, 1.2, 16, 2, 19, 4],
               'circle-blur': 0.2,
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 13.5, 0.9, 15, 1],
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.8, 13.5, 0.95, 15, 1],
             },
           },
           labelLayer,
