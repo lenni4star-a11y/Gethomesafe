@@ -138,19 +138,20 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             maxzoom: 15.5,
             paint: {
               'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 0, 0, 3, 0.4, 12, 1],
-              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.25, 11, 0.35, 12, 0.45, 13, 0.6, 15, 0.9],
-              'heatmap-radius': ['interpolate', ['exponential', 1.6], ['zoom'], 9, 3, 11, 6, 12, 9, 13, 13, 14, 18, 15, 24],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 9, 0.15, 10.5, 0.22, 12, 0.5, 13, 0.8, 14, 1],
+              'heatmap-radius': ['interpolate', ['exponential', 1.6], ['zoom'], 9, 2.5, 10.5, 4, 12, 8, 13, 12, 14, 16, 15, 22],
               'heatmap-color': [
                 'interpolate',
                 ['linear'],
                 ['heatmap-density'],
-                0, 'rgba(255,170,60,0)',
-                0.2, 'rgba(255,160,55,0.35)',
-                0.5, 'rgba(255,185,85,0.65)',
-                0.8, 'rgba(255,205,120,0.85)',
-                1, 'rgba(255,225,160,0.95)',
+                0, 'rgba(180,90,20,0)',
+                0.1, 'rgba(190,100,25,0.25)',
+                0.3, 'rgba(240,145,45,0.55)',
+                0.6, 'rgba(255,190,90,0.8)',
+                0.85, 'rgba(255,225,150,0.92)',
+                1, 'rgba(255,245,210,1)',
               ],
-              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.9, 13, 0.6, 14, 0.3, 15.5, 0],
+              'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 11, 1, 13, 0.75, 14, 0.45, 15.5, 0],
             },
           },
           labelLayer,
@@ -160,12 +161,12 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             id: 'lights-glow',
             type: 'circle',
             source: 'lights',
-            minzoom: 12.5,
+            minzoom: 12,
             paint: {
               'circle-color': '#ffb24a',
-              'circle-radius': ['interpolate', ['exponential', 1.8], ['zoom'], 12.5, 1.5, 15, 6, 17, 18, 19, 40],
+              'circle-radius': ['interpolate', ['exponential', 1.8], ['zoom'], 12, 1.5, 15, 6, 17, 18, 19, 40],
               'circle-blur': 1,
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 14, 0.3, 16, 0.4],
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.1, 14, 0.35, 16, 0.45],
             },
           },
           labelLayer,
@@ -175,12 +176,12 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
             id: 'lights-core',
             type: 'circle',
             source: 'lights',
-            minzoom: 12.5,
+            minzoom: 12,
             paint: {
               'circle-color': '#ffe9b8',
-              'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 0.4, 14, 1, 16, 2, 19, 4],
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 0.6, 14, 1.2, 16, 2, 19, 4],
               'circle-blur': 0.2,
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 13.5, 0.7, 15, 1],
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 13.5, 0.9, 15, 1],
             },
           },
           labelLayer,
@@ -191,11 +192,11 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView({ index, ci
           type: 'FeatureCollection' as const,
           features: pts.map((c) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: c } })),
         });
-        // einzelne Laternen nur im sichtbaren Ausschnitt und erst ab Zoom 12,5 – das hält die Karte auch auf älteren Handys flüssig
+        // einzelne Laternen nur im sichtbaren Ausschnitt und erst ab Zoom 12 – das hält die Karte auch auf älteren Handys flüssig
         const updateNear = () => {
           const src = map.getSource('lights') as GeoJSONSource | undefined;
           if (!src) return;
-          if (!allLights || map.getZoom() < 12.5) return src.setData(empty);
+          if (!allLights || map.getZoom() < 12) return src.setData(empty);
           const b = map.getBounds();
           const pad = 0.2;
           const w = b.getEast() - b.getWest();
