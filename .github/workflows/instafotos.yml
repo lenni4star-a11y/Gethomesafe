@@ -1,0 +1,36 @@
+# Bilder der Licht-Ansicht für Instagram – nur von Hand starten. Ergebnis im Zweig kartentest-fotos (Ordner insta/).
+name: Instagram-Fotos
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fotos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Fotos
+        timeout-minutes: 15
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          sleep 5
+          node scripts/instafotos.mjs
+      - name: Fotos in den Zweig kartentest-fotos legen
+        if: always()
+        run: |
+          cd kartentest
+          git init -q
+          git checkout -q -b kartentest-fotos
+          git add .
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Instagram-Fotos ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" kartentest-fotos
