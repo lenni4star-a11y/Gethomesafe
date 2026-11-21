@@ -1,0 +1,41 @@
+# Kameraflug über Wien bei Nacht für Instagram – nur von Hand starten. Ergebnis im Zweig kartentest-fotos (zoomfilm/zoomfilm.mp4).
+name: Zoomfilm
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  film:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Bilder aufnehmen
+        timeout-minutes: 35
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          sleep 5
+          node scripts/zoomfilm.mjs
+      - name: Film zusammensetzen
+        run: |
+          ffmpeg -y -loglevel error -framerate 30 -i kartentest/zoomfilm/bilder/f%04d.jpg -c:v libx264 -crf 16 -preset veryfast -pix_fmt yuv420p kartentest/zoomfilm/zoomfilm.mp4
+          rm -rf kartentest/zoomfilm/bilder
+          ls -la kartentest/zoomfilm
+      - name: Film in den Zweig kartentest-fotos legen
+        if: always()
+        run: |
+          cd kartentest
+          git init -q
+          git checkout -q -b kartentest-fotos
+          git add .
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Zoomfilm ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" kartentest-fotos
