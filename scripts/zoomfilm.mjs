@@ -29,6 +29,10 @@ await page.evaluate(() => {
   }
 });
 
+// erstes Bild: Karte und Lichter ganz laden lassen
+await page.evaluate(([c, z]) => { window.__gwMap.jumpTo({ center: c, zoom: z }); }, [FROM.c, FROM.z]);
+await page.waitForTimeout(6000);
+
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 for (let i = 0; i < FRAMES; i++) {
   const t = ease(i / (FRAMES - 1));
@@ -38,7 +42,7 @@ for (let i = 0; i < FRAMES; i++) {
   const c = [FROM.c[0] + (TO.c[0] - FROM.c[0]) * k, FROM.c[1] + (TO.c[1] - FROM.c[1]) * k];
   await page.evaluate(([cc, zz]) => { window.__gwMap.jumpTo({ center: cc, zoom: zz }); }, [c, z]);
   await page.waitForFunction(() => window.__gwMap.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(i < 5 ? 2000 : 350);
   await page.screenshot({ path: `${OUT}/bilder/f${String(i).padStart(4, '0')}.jpg`, type: 'jpeg', quality: 92, timeout: 60000 });
   if (i % 20 === 0) console.log('Bild', i, 'Zoom', z.toFixed(2));
 }

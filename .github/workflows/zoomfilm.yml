@@ -25,11 +25,6 @@ jobs:
           npx vite preview --port 4173 --strictPort &
           sleep 5
           node scripts/zoomfilm.mjs
-      - name: Film zusammensetzen
-        run: |
-          ffmpeg -y -loglevel error -framerate 30 -i kartentest/zoomfilm/bilder/f%04d.jpg -c:v libx264 -crf 16 -preset veryfast -pix_fmt yuv420p kartentest/zoomfilm/zoomfilm.mp4
-          rm -rf kartentest/zoomfilm/bilder
-          ls -la kartentest/zoomfilm
       - name: Film in den Zweig kartentest-fotos legen
         if: always()
         run: |
