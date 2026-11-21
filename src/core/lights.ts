@@ -42,13 +42,17 @@ export function aggregateLights(pts: LngLat[], cell = 100): { at: LngLat; n: num
   return [...cells.values()].map((c) => ({ at: [c.x / c.n, c.y / c.n] as LngLat, n: c.n }));
 }
 
-/** Für die Nahansicht: nur die Laternen im sichtbaren Ausschnitt (höchstens `max`) */
+/** Für die Nahansicht: nur die Laternen im sichtbaren Ausschnitt. Sind es mehr als `max`, wird gleichmäßig
+ *  ausgedünnt (jede k-te), damit der ganze Ausschnitt gefüllt bleibt – nicht nur ein Streifen. */
 export function lightsInBox(pts: LngLat[], box: [number, number, number, number], max = 30000): LngLat[] {
-  const out: LngLat[] = [];
+  const inside: LngLat[] = [];
   for (const p of pts) {
     if (p[0] < box[0] || p[0] > box[2] || p[1] < box[1] || p[1] > box[3]) continue;
-    out.push(p);
-    if (out.length >= max) break;
+    inside.push(p);
   }
+  if (inside.length <= max) return inside;
+  const step = inside.length / max;
+  const out: LngLat[] = [];
+  for (let k = 0; k < max; k++) out.push(inside[Math.floor(k * step)]);
   return out;
 }
