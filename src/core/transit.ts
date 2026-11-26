@@ -73,9 +73,23 @@ export interface TransitOption {
 const WALK_SPEED = 1.3;
 const DETOUR = 1.3;
 const MAX_ACCESS = 900; // höchstens so weit (Luftlinie, m) zur ersten / von der letzten Haltestelle
+/** Höchstens so lang (m) darf der echte Fußweg zur ersten / von der letzten Haltestelle sein, wenn er bekannt ist */
+export const MAX_ACCESS_PATH = 1600;
 const MAX_TRANSFER = 250; // Umsteigen zu Fuß
 const BOARD_BUFFER = 1; // Minuten Puffer beim Einsteigen
 const walkMin = (m: number) => (m * DETOUR) / WALK_SPEED / 60;
+/** Minuten für eine echte Weglänge (schon mit allen Umwegen) */
+const pathMin = (m: number) => m / WALK_SPEED / 60;
+
+/**
+ * Echte Fußwege (Meter entlang des Wegenetzes) zur ersten und von der letzten Haltestelle.
+ * Gibt die Funktion null zurück, ist die Haltestelle zu Fuß nicht (oder nur zu weit) erreichbar.
+ * Ohne diese Angabe wird mit Luftlinie × Umwegfaktor geschätzt.
+ */
+export interface WalkEstimate {
+  access?: ((stop: LngLat) => number | null) | null;
+  egress?: ((stop: LngLat) => number | null) | null;
+}
 
 export function dayTypeOf(d: Date): DayType {
   const wd = d.getDay();
@@ -124,7 +138,13 @@ export class TransitNetwork {
    * Beste Öffi-Verbindungen (höchstens `limit`), sortiert nach Bewertung.
    * `date` = Losgeh-Zeit; nachts (dark) zählen Warten und dunkle Haltestellen stärker.
    */
-  search(from: LngLat, to: LngLat, date: Date, dark: boolean, limit = 2): TransitOption[] {
+  search(from: LngLat, to: LngLat, date: Date, dark: boolean, limit = 2, walk: WalkEstimate = {}): TransitOption[] {
+    /** Weglänge in Metern (echt, falls bekannt, sonst Luftlinie × Umwegfaktor); null = nicht erreichbar */
+    const pathMeters = (fn: WalkEstimate['access'], stop: number, air: number): number | null => {
+      if (!fn) return air <= MAX_ACCESS ? air * DETOUR : null;
+      const m = fn(this.stops[stop].coords);
+      return m === null || m > MAX_ACCESS_PATH ? null : m;
+    };
     const startMin = date.getHours() * 60 + date.getMinutes();
     const today = dayTypeOf(date);
     const yesterday = prevDay(date);
@@ -164,8 +184,10 @@ export class TransitNetwork {
     arr[0] = new Array(n).fill(Infinity);
     parent[0] = new Array(n);
     let marked = new Set<number>();
-    for (const { stop, meters } of this.stopsNear(from)) {
-      arr[0][stop] = startMin + walkMin(meters);
+    for (const { stop, meters: air } of this.stopsNear(from, walk.access ? MAX_ACCESS_PATH : MAX_ACCESS)) {
+      const meters = pathMeters(walk.access, stop, air);
+      if (meters === null) continue;
+      arr[0][stop] = startMin + pathMin(meters);
       parent[0][stop] = { kind: 'origin', meters };
       marked.add(stop);
     }
@@ -184,6 +206,7 @@ export class TransitNetwork {
         const p = P[pi];
         let base: number | null = null;
         let boardPos = -1;
+        let boardReady = Infinity;
         for (let i = startPos; i < p.s.length; i++) {
           const s = p.s[i];
           if (base !== null) {
@@ -196,11 +219,19 @@ export class TransitNetwork {
           }
           const ready = arr[k - 1][s];
           if (ready < Infinity) {
-            const buffer = parent[k - 1][s]?.kind === 'origin' ? BOARD_BUFFER : BOARD_BUFFER + 1;
+            const fromOrigin = parent[k - 1][s]?.kind === 'origin';
+            const buffer = fromOrigin ? BOARD_BUFFER : BOARD_BUFFER + 1;
             const d = firstAtOrAfter(deps(pi), ready + buffer - p.o[i]);
-            if (d !== null && (base === null || d < base) && d + p.o[i] - ready <= 45) {
+            // Höchstens 45 min an einer Haltestelle warten. Bei der ersten Fahrt zählt die Zeit ab dem Losgehen
+            // (+30 min Fußweg), denn man kann auch später losgehen. Sonst würde eine weiter entfernte Haltestelle
+            // nur gewählt, weil man dort „weniger lang wartet“.
+            const waitOk = d !== null && (fromOrigin ? d + p.o[i] - startMin <= 75 : d + p.o[i] - ready <= 45);
+            // Früheren Kurs nehmen – oder denselben Kurs an einer späteren Haltestelle, die man früher erreicht
+            // (weniger Fußweg). Sonst ginge man z. B. zur Station hinter sich und führe an der eigenen vorbei.
+            if (d !== null && waitOk && (base === null || d < base || (d === base && ready < boardReady))) {
               base = d;
               boardPos = i;
+              boardReady = ready;
             }
           }
         }
@@ -223,13 +254,15 @@ export class TransitNetwork {
 
     // Ziel-Haltestellen auswerten
     const options: TransitOption[] = [];
-    for (const { stop, meters } of this.stopsNear(to)) {
+    for (const { stop, meters: air } of this.stopsNear(to, walk.egress ? MAX_ACCESS_PATH : MAX_ACCESS)) {
+      const meters = pathMeters(walk.egress, stop, air);
+      if (meters === null) continue;
       for (let k = 1; k <= ROUNDS; k++) {
         if (!(arr[k]?.[stop] < Infinity) || parent[k][stop]?.kind === 'origin') continue;
         const legs = this.reconstruct(k, stop, from, parent);
         if (!legs) continue;
         const last = this.stops[stop].coords;
-        const walkEnd = { type: 'walk' as const, from: last, to, meters: meters * DETOUR, minutes: walkMin(meters) };
+        const walkEnd = { type: 'walk' as const, from: last, to, meters, minutes: pathMin(meters) };
         legs.push(walkEnd);
         const arriveMin = arr[k][stop] + walkEnd.minutes;
         const rides = legs.filter((l): l is RideLeg => l.type === 'ride');
@@ -277,7 +310,7 @@ export class TransitNetwork {
       const p = parent[k][s];
       if (!p) return null;
       if (p.kind === 'origin') {
-        legs.unshift({ type: 'walk', from, to: this.stops[s].coords, meters: p.meters * DETOUR, minutes: walkMin(p.meters) });
+        legs.unshift({ type: 'walk', from, to: this.stops[s].coords, meters: p.meters, minutes: pathMin(p.meters) });
         break;
       }
       if (p.kind === 'transfer') {
@@ -293,7 +326,7 @@ export class TransitNetwork {
         line,
         mode,
         color,
-        headsign: pat.h,
+        headsign: pat.h || this.stops[pat.s[pat.s.length - 1]].name,
         from: this.stops[pat.s[p.board]],
         to: this.stops[pat.s[p.alight]],
         departMin,

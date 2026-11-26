@@ -5,8 +5,8 @@
 import { summarize, type RouteSummary } from './analysis';
 import { bboxAround, bboxIntersects, pointInRing } from './geo';
 import { Graph } from './graph';
-import { findRoute } from './routing';
-import { formatClock, lineColor, MODE_LABEL, TransitNetwork, type RideLeg, type TransitData } from './transit';
+import { findRoute, walkReach } from './routing';
+import { formatClock, lineColor, MAX_ACCESS_PATH, MODE_LABEL, TransitNetwork, type RideLeg, type TransitData } from './transit';
 import { ratingLookup, timeFilterFor, type Rating } from './ratings';
 import { createContext, type ContextOptions } from './safety';
 import { isDark } from './sun';
@@ -132,7 +132,10 @@ export class Planner {
   private async planTransit(from: LngLat, to: LngLat, date: Date, ctx: ReturnType<typeof createContext>, extras: Extras | null, walkSeconds: number): Promise<RouteSummary | null> {
     const net = await this.transitNetwork(cityOf(this.districtAt(from) ?? {}));
     if (!net) return null;
-    const [opt] = net.search(from, to, date, ctx.dark, 1);
+    // Echte Fußwege zu den Haltestellen (wie sie die App danach zeigt) statt Luftlinie
+    await this.ensureDistricts([from, to], MAX_ACCESS_PATH + 200);
+    const reach = { access: walkReach(this.graph, from, ctx, MAX_ACCESS_PATH), egress: walkReach(this.graph, to, ctx, MAX_ACCESS_PATH) };
+    const [opt] = net.search(from, to, date, ctx.dark, 1, reach);
     if (!opt) return null;
     // Auch anzeigen, wenn es nicht schneller ist: Die Wahl trifft die Person (z. B. weniger Fußweg in der Nacht).
     const notFaster = opt.totalMin * 60 > walkSeconds - 4 * 60;
