@@ -58,3 +58,66 @@ describe('Öffis vorauswählen', () => {
     expect(recommendTransit({ safest: r(40), transit: null })).toBe(false);
   });
 });
+
+describe('Öffi-Routing: Wahl der Haltestellen', () => {
+  // Eine Linie fährt von Süden nach Norden: Süd (0) → Mitte (1) → Nord (2) → Ende (3).
+  // Der Start liegt zwischen Süd und Mitte, etwas näher an Mitte (wie in Berlin: Bundesplatz vs. Berliner Straße).
+  const lon = 13.33;
+  const at = (lat: number): [number, number] => [lon, 52.48 + lat];
+  const mini: TransitData = {
+    generated: '',
+    source: 'Test',
+    days: { mo: '', fr: '', sa: '', so: '' },
+    validUntil: '',
+    stops: [
+      ['Süd', ...at(0), 1],
+      ['Mitte', ...at(0.0095), 1],
+      ['Nord', ...at(0.02), 1],
+      ['Ende', ...at(0.05), 1],
+    ],
+    routes: [['U9', 1]],
+    patterns: [
+      {
+        r: 0,
+        h: '',
+        s: [0, 1, 2, 3],
+        o: [0, 2, 4, 10],
+        d: { mo: Array.from({ length: 30 }, (_, i) => 1200 + i * 10), fr: [], sa: [], so: [] },
+      },
+    ],
+  };
+  const tiny = new TransitNetwork(mini);
+  const start = at(0.005); // 556 m bis Süd, 500 m bis Mitte
+  const goal = at(0.0505);
+  const date = new Date(2026, 10, 25, 22, 8); // Mittwoch
+
+  it('steigt an der nächsten Haltestelle in Fahrtrichtung ein, nicht an der Station dahinter', () => {
+    const [best] = tiny.search(start, goal, date, true);
+    expect(rides(best)[0].from.name).toBe('Mitte');
+  });
+
+  it('nimmt echte Fußwege statt Luftlinie, wenn sie bekannt sind', () => {
+    // Mitte ist zu Fuß nur über einen weiten Umweg erreichbar (z. B. Bahngleise dazwischen)
+    const access = (p: [number, number]) => (p[1] > 52.489 && p[1] < 52.49 ? 1500 : 600);
+    const [best] = tiny.search(start, goal, date, true, 2, { access, egress: () => 60 });
+    expect(rides(best)[0].from.name).toBe('Süd');
+    expect(best.legs[0].type === 'walk' && best.legs[0].meters).toBe(600);
+  });
+
+  it('lässt Haltestellen weg, die zu Fuß nicht erreichbar sind', () => {
+    const opts = tiny.search(start, goal, date, true, 2, { access: () => null });
+    expect(opts).toHaveLength(0);
+  });
+
+  it('nennt ohne Richtungsangabe im Fahrplan die Endstation', () => {
+    const [best] = tiny.search(start, goal, date, true);
+    expect(rides(best)[0].headsign).toBe('Ende');
+  });
+
+  it('wählt bei seltenen Nachtfahrten trotzdem die nahe Haltestelle (später losgehen statt weiter gehen)', () => {
+    const night: TransitData = { ...mini, patterns: [{ ...mini.patterns[0], d: { mo: [], fr: [], sa: [], so: [] } }] };
+    night.patterns[0].d.mo = [24 * 60 + 52]; // eine Fahrt um 0:52, Losgehen um 0:00
+    const [best] = new TransitNetwork(night).search(start, goal, new Date(2026, 10, 26, 0, 0), true);
+    expect(rides(best)[0].from.name).toBe('Mitte');
+  });
+});

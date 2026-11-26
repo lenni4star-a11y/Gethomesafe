@@ -83,6 +83,51 @@ export function findRoute(graph: Graph, from: LngLat, to: LngLat, mode: RouteMod
   return { mode, steps, from, to };
 }
 
+/**
+ * Echte Gehwege ab einem Punkt (für die Öffi-Suche): Dijkstra mit denselben Kosten wie die sicherste Route,
+ * Ergebnis je Knoten = Länge (m) dieses Weges. So kennt die Öffi-Suche die Fußwege, die die App später zeigt,
+ * statt mit der Luftlinie zu schätzen. Gesucht wird nur bis `maxMeters` Weglänge.
+ * Das Wegenetz ist ungerichtet, deshalb gilt das Ergebnis auch für den Weg zurück zu diesem Punkt.
+ */
+export function walkReach(graph: Graph, from: LngLat, ctx: SafetyContext, maxMeters: number): ((p: LngLat) => number | null) | null {
+  const start = graph.nearestNode(from);
+  if (start === null) return null;
+  const cost = new Map<number, number>([[start, 0]]);
+  const len = new Map<number, number>([[start, 0]]);
+  const done = new Set<number>();
+  const riskCache = new Map<number, number>();
+  const heap = new MinHeap();
+  heap.push(start, 0);
+  while (heap.size) {
+    const cur = heap.pop();
+    if (done.has(cur)) continue;
+    done.add(cur);
+    const curLen = len.get(cur)!;
+    if (curLen > maxMeters) continue;
+    for (const eid of graph.adjacency[cur]) {
+      const e = graph.edges[eid];
+      if (e.parkHours && parkClosed(e, ctx.date)) continue;
+      const next = graph.other(e, cur);
+      if (done.has(next)) continue;
+      let r = riskCache.get(e.id);
+      if (r === undefined) riskCache.set(e.id, (r = edgeRisk(e, graph.pois, ctx).risk));
+      const c = cost.get(cur)! + edgeSeconds(e) * WALK_SPEED * (1 + WEIGHTS.avoid * r);
+      if (c < (cost.get(next) ?? Infinity)) {
+        cost.set(next, c);
+        len.set(next, curLen + e.length);
+        heap.push(next, c);
+      }
+    }
+  }
+  const startOffset = distance(graph.coords[start], from);
+  return (p) => {
+    const n = graph.nearestNode(p, 150);
+    if (n === null || !done.has(n)) return null;
+    const m = len.get(n)!;
+    return m > maxMeters ? null : m + startOffset + distance(graph.coords[n], p);
+  };
+}
+
 class MinHeap {
   private items: number[] = [];
   private prio: number[] = [];
